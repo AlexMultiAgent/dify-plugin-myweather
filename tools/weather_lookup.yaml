@@ -1,0 +1,225 @@
+identity:
+  name: weather_lookup
+  author: alexmultiagent
+  label:
+    en_US: Weather Lookup
+    zh_Hans: 天气查询
+    zh_Hant: 天氣查詢
+    ja_JP: 天気検索
+    ko_KR: 날씨 검색
+  icon: _assets/icon.svg
+description:
+  human:
+    en_US: Get current weather with no API key, with multi-language translation and CJK-aware geolocation.
+    zh_Hans: 无需 API Key 的天气查询，支持多语言天气翻译与 CJK 地名定位（wttr.in + Open-Meteo）。
+    zh_Hant: 無需 API Key 的天氣查詢，支援多語言天氣翻譯與 CJK 地名定位（wttr.in + Open-Meteo）。
+    ja_JP: APIキー不要の天気検索、多言語翻訳とCJK対応ジオコーディングに対応。
+    ko_KR: API 키가 필요 없는 날씨 검색, 다국어 번역과 CJK 인식 지오코딩을 지원합니다.
+  llm: Use this tool for current weather questions. Extract only the place name (English, Chinese, Japanese, or Korean) as location. Set language to ja for Japanese, ko for Korean.
+parameters:
+- name: location
+  type: string
+  required: true
+  form: llm
+  label:
+    en_US: Location
+    zh_Hans: 地点
+    zh_Hant: 地點
+    ja_JP: 場所
+    ko_KR: 장소
+  human_description:
+    en_US: City, region, airport code, or place name. For overseas cities, include country/region when possible.
+    zh_Hans: 城市、地区、机场代码或地名。查询海外城市时建议附带国家/地区。
+    zh_Hant: 城市、地區、機場代碼或地名。查詢海外城市時建議附帶國家/地區。
+    ja_JP: 都市、地域、空港コード、または地名。海外の都市の場合、国/地域を含めてください。
+    ko_KR: 도시, 지역, 공항 코드 또는 장소명. 해외 도시의 경우 가능하면 국가/지역을 포함하세요.
+  llm_description: "Extract only the place name from user input (for example: Shanghai, London, JFK, 深圳, 東京). Do not include extra words like weather, forecast, now, today, 天气, 天気."
+- name: language
+  type: select
+  required: false
+  default: auto
+  form: form
+  label:
+    en_US: Language
+    zh_Hans: 语言
+    zh_Hant: 語言
+    ja_JP: 言語
+    ko_KR: 언어
+  human_description:
+    en_US: Output language. 'Auto' detects from input text (Hangul → Korean, hiragana/katakana → Japanese, CJK → Simplified Chinese, otherwise English).
+    zh_Hans: 输出语言。"自动"会根据输入文本检测（谚文 → 韩语，平假名/片假名 → 日语，汉字 → 简体中文，否则 → 英文）。
+    zh_Hant: 輸出語言。"自動"會根據輸入文本檢測（諺文 → 韓語，平假名/片假名 → 日語，漢字 → 簡體中文，否則 → 英文）。
+    ja_JP: 出力言語。"自動"は入力テキストから検出します（ハングル → 韓国語、ひらがな/カタカナ → 日本語、漢字 → 簡体字中国語、それ以外 → 英語）。
+    ko_KR: 출력 언어. "자동"은 입력 텍스트에서 감지합니다 (한글 → 한국어, 히라가나/가타카나 → 일본어, 한자 → 중국어 간체, 그 외 → 영어).
+  options:
+  - label:
+      en_US: Auto (detect)
+      zh_Hans: 自动
+      zh_Hant: 自動
+      ja_JP: 自動
+      ko_KR: 자동
+    value: auto
+  - label:
+      en_US: English
+      zh_Hans: 英文
+      zh_Hant: 英文
+      ja_JP: 英語
+      ko_KR: 영어
+    value: en-US
+  - label:
+      en_US: Simplified Chinese
+      zh_Hans: 简体中文
+      zh_Hant: 簡體中文
+      ja_JP: 簡体字中国語
+      ko_KR: 중국어 간체
+    value: zh-Hans
+  - label:
+      en_US: Traditional Chinese
+      zh_Hans: 繁体中文
+      zh_Hant: 繁體中文
+      ja_JP: 繁体字中国語
+      ko_KR: 중국어 번체
+    value: zh-Hant
+  - label:
+      en_US: Japanese
+      zh_Hans: 日文
+      zh_Hant: 日文
+      ja_JP: 日本語
+      ko_KR: 일본어
+    value: ja
+  - label:
+      en_US: Korean
+      zh_Hans: 韩文
+      zh_Hant: 韓文
+      ja_JP: 韓国語
+      ko_KR: 한국어
+    value: ko
+- name: units
+  type: select
+  required: false
+  default: metric
+  form: form
+  label:
+    en_US: Units
+    zh_Hans: 单位制
+    zh_Hant: 單位制
+    ja_JP: 単位系
+    ko_KR: 단위계
+  human_description:
+    en_US: Unit system for temperature and wind speed.
+    zh_Hans: 温度和风速单位。
+    zh_Hant: 溫度和風速單位。
+    ja_JP: 気温と風速の単位系。
+    ko_KR: 온도와 풍속의 단위계.
+  options:
+  - label:
+      en_US: Metric (C, km/h)
+      zh_Hans: 公制（C，km/h）
+      zh_Hant: 公制（C，km/h）
+      ja_JP: メートル法（C、km/h）
+      ko_KR: 미터법 (C, km/h)
+    value: metric
+  - label:
+      en_US: USCS (F, mph)
+      zh_Hans: 美制（F，mph）
+      zh_Hant: 美制（F，mph）
+      ja_JP: 米国慣用単位（F、mph）
+      ko_KR: 미국 관용 단위 (F, mph)
+    value: uscs
+- name: source_preference
+  type: select
+  required: false
+  default: wttr
+  form: form
+  label:
+    en_US: Source Preference
+    zh_Hans: 数据源偏好
+    zh_Hant: 資料來源偏好
+    ja_JP: データソース優先
+    ko_KR: 데이터 소스 우선
+  human_description:
+    en_US: Choose primary source. The unselected provider is always used as fallback.
+    zh_Hans: 选择主数据源，未选中的数据源会自动兜底。
+    zh_Hant: 選擇主資料來源，未選擇的資料來源會自動兜底。
+    ja_JP: 優先データソースを選択。選択されていないプロバイダーは常にフォールバックとして使用されます。
+    ko_KR: 주 데이터 소스를 선택합니다. 선택되지 않은 공급자는 항상 대체 수단으로 사용됩니다.
+  options:
+  - label:
+      en_US: wttr.in first (Open-Meteo fallback)
+      zh_Hans: wttr.in 优先（Open-Meteo 兜底）
+      zh_Hant: wttr.in 優先（Open-Meteo 兜底）
+      ja_JP: wttr.in 優先（Open-Meteo フォールバック）
+      ko_KR: wttr.in 우선 (Open-Meteo 대체)
+    value: wttr
+  - label:
+      en_US: Open-Meteo first (wttr.in fallback)
+      zh_Hans: Open-Meteo 优先（wttr.in 兜底）
+      zh_Hant: Open-Meteo 優先（wttr.in 兜底）
+      ja_JP: Open-Meteo 優先（wttr.in フォールバック）
+      ko_KR: Open-Meteo 우선 (wttr.in 대체)
+    value: open-meteo
+- name: include_raw_json
+  type: boolean
+  required: false
+  default: false
+  form: form
+  label:
+    en_US: Include Raw JSON
+    zh_Hans: 包含原始 JSON
+    zh_Hant: 包含原始 JSON
+    ja_JP: 生JSONを含む
+    ko_KR: 원본 JSON 포함
+  human_description:
+    en_US: Include raw upstream payload in the JSON output.
+    zh_Hans: 在 JSON 输出中包含上游原始响应。
+    zh_Hant: 在 JSON 輸出中包含上游原始響應。
+    ja_JP: JSON出力に上流の生ペイロードを含めます。
+    ko_KR: JSON 출력에 업스트림 원본 페이로드를 포함합니다.
+output_schema:
+  type: object
+  properties:
+    source:
+      type: string
+      description: Actual provider used (wttr or open-meteo).
+    source_display:
+      type: string
+      description: Human-readable source text for UI display and compliance rendering.
+    language:
+      type: string
+      description: Resolved output language (en-US, zh-Hans, zh-Hant, ja, or ko).
+    location:
+      type: string
+      description: Resolved location name from provider.
+    condition:
+      type: string
+      description: Text weather condition.
+    temperature:
+      type: number
+      description: Current temperature in selected unit system.
+    temperature_unit:
+      type: string
+      description: Temperature unit symbol.
+    feels_like:
+      type: number
+      description: Feels-like temperature in selected unit system.
+    humidity:
+      type: integer
+      description: Relative humidity percentage.
+    wind_speed:
+      type: number
+      description: Wind speed in selected unit system.
+    wind_speed_unit:
+      type: string
+      description: Wind speed unit.
+    summary:
+      type: string
+      description: Human-readable summary sentence.
+    open_meteo_compliance_notice:
+      type: string
+      description: Open-Meteo attribution + plugin modification notice (only when source is Open-Meteo).
+    rate_limit_notice:
+      type: string
+      description: Open-Meteo fallback/rate-limit notice (shown only when Open-Meteo fails or returns 429).
+extra:
+  python:
+    source: tools/weather_lookup.py
