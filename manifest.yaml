@@ -1,0 +1,46 @@
+version: 0.1.2
+type: plugin
+author: alexmultiagent
+name: myweather
+label:
+  en_US: MyWeather
+  zh_Hans: MyWeather
+  zh_Hant: MyWeather
+  ja_JP: MyWeather
+  ko_KR: MyWeather
+description:
+  en_US: >
+    Weather plugin with multi-language output and CJK-aware geocoding (wttr.in + Open-Meteo),
+    no API key required. Supports English, Simplified Chinese, Traditional Chinese, Japanese, and Korean.
+  zh_Hans: 免 API Key 的多语言天气插件
+  zh_Hant: >
+    免 API Key 的多語言天氣插件，支援多語言翻譯與 CJK 地名定位（wttr.in + Open-Meteo）。
+    支援英文、簡體中文、繁體中文、日語和韓語。
+  ja_JP: >
+    APIキー不要の多言語天気プラグイン、CJK対応ジオコーディング（wttr.in + Open-Meteo）。
+    英語、簡体字中国語、繁体字中国語、日本語、韓国語に対応。
+  ko_KR: >
+    API 키가 필요 없는 다국어 날씨 플러그인, CJK 인식 지오코딩 지원 (wttr.in + Open-Meteo).
+    영어, 중국어 간체, 중국어 번체, 일본어, 한국어를 지원합니다.
+icon: _assets/icon.svg
+created_at: '2026-04-08T00:00:00Z'
+resource:
+  memory: 1048576
+  permission:
+    tool:
+      enabled: true
+plugins:
+  tools:
+  - provider/myweather.yaml
+meta:
+  version: 0.1.2
+  arch:
+  - amd64
+  - arm64
+  runner:
+    language: python
+    version: '3.12'
+    entrypoint: main
+privacy: ./PRIVACY.md
+tags:
+- weather
