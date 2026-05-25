@@ -11,10 +11,15 @@ def _as_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "y", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "n", "off"}:
+            return False
+        return False
     if isinstance(value, (int, float)):
         return value != 0
-    return bool(value)
+    return False
 
 
 _LQ = "“"
