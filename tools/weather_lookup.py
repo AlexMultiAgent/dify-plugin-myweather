@@ -12,6 +12,8 @@ def _as_bool(value: Any) -> bool:
         return value
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    if isinstance(value, (int, float)):
+        return value != 0
     return bool(value)
 
 
@@ -36,7 +38,7 @@ class WeatherLookupTool(Tool):
         location = str(tool_parameters.get("location", "")).strip()
         if not location:
             yield self.create_text_message(
-                "Please provide a location, for example: Shanghai, London, or New York."
+                _error_message("(empty)", "Location is required.", "en-US")
             )
             return
 
