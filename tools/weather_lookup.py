@@ -20,6 +20,23 @@ def _as_bool(value: Any) -> bool:
 _LQ = "“"
 _RQ = "”"
 
+_OUTPUT_FIELDS = (
+    "source",
+    "source_display",
+    "language",
+    "location",
+    "condition",
+    "temperature",
+    "temperature_unit",
+    "feels_like",
+    "humidity",
+    "wind_speed",
+    "wind_speed_unit",
+    "summary",
+    "open_meteo_compliance_notice",
+    "rate_limit_notice",
+)
+
 
 def _error_message(location: str, exc: str, language: str) -> str:
     if language == "zh-Hans":
@@ -59,41 +76,15 @@ class WeatherLookupTool(Tool):
             yield self.create_text_message(_error_message(location, str(exc), detected_lang))
             return
 
-        yield self.create_variable_message("source", weather["source"])
-        yield self.create_variable_message("source_display", weather["source_display"])
-        yield self.create_variable_message("language", weather.get("language", "en-US"))
-        yield self.create_variable_message("location", weather["location"])
-        yield self.create_variable_message("condition", weather["condition"])
-        yield self.create_variable_message("temperature", weather["temperature"])
-        yield self.create_variable_message("temperature_unit", weather["temperature_unit"])
-        yield self.create_variable_message("feels_like", weather["feels_like"])
-        yield self.create_variable_message("humidity", weather["humidity"])
-        yield self.create_variable_message("wind_speed", weather["wind_speed"])
-        yield self.create_variable_message("wind_speed_unit", weather["wind_speed_unit"])
-        yield self.create_variable_message("summary", weather["summary"])
-        yield self.create_variable_message("open_meteo_compliance_notice", weather["open_meteo_compliance_notice"])
-        yield self.create_variable_message("rate_limit_notice", weather["rate_limit_notice"])
+        for field in _OUTPUT_FIELDS:
+            value = weather.get(field, "en-US") if field == "language" else weather[field]
+            yield self.create_variable_message(field, value)
 
         if include_raw_json:
             yield self.create_json_message(weather)
         else:
             yield self.create_json_message(
-                {
-                    "source": weather["source"],
-                    "source_display": weather["source_display"],
-                    "language": weather.get("language", "en-US"),
-                    "location": weather["location"],
-                    "condition": weather["condition"],
-                    "temperature": weather["temperature"],
-                    "temperature_unit": weather["temperature_unit"],
-                    "feels_like": weather["feels_like"],
-                    "humidity": weather["humidity"],
-                    "wind_speed": weather["wind_speed"],
-                    "wind_speed_unit": weather["wind_speed_unit"],
-                    "summary": weather["summary"],
-                    "open_meteo_compliance_notice": weather["open_meteo_compliance_notice"],
-                    "rate_limit_notice": weather["rate_limit_notice"],
-                }
+                {field: (weather.get(field, "en-US") if field == "language" else weather[field]) for field in _OUTPUT_FIELDS}
             )
 
         yield self.create_text_message(weather["summary"])

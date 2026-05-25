@@ -896,49 +896,53 @@ def get_weather(
 
     output_language = _resolve_language(language, location)
     active_session = session or requests.Session()
-    attempts = source_order[preferred_source]
-    errors: dict[str, str] = {}
-    location_candidates = _candidate_locations(location, output_language)
-    open_meteo_failed = False
-    open_meteo_rate_limited = False
+    try:
+        attempts = source_order[preferred_source]
+        errors: dict[str, str] = {}
+        location_candidates = _candidate_locations(location, output_language)
+        open_meteo_failed = False
+        open_meteo_rate_limited = False
 
-    for source in attempts:
-        for candidate in location_candidates:
-            try:
-                if source == "wttr":
-                    result = _fetch_from_wttr(candidate, active_session)
-                else:
-                    result = _fetch_from_open_meteo(candidate, active_session, output_language)
+        for source in attempts:
+            for candidate in location_candidates:
+                try:
+                    if source == "wttr":
+                        result = _fetch_from_wttr(candidate, active_session)
+                    else:
+                        result = _fetch_from_open_meteo(candidate, active_session, output_language)
 
-                _normalize_units(result, units)
-                result["condition"] = _translate_condition(
-                    str(result.get("condition") or ""), output_language
-                )
-                result["open_meteo_compliance_notice"] = (
-                    _build_open_meteo_compliance_notice(language=output_language)
-                    if result.get("source") == "open-meteo"
-                    else ""
-                )
-                if result.get("source") == "wttr" and open_meteo_failed:
-                    result["rate_limit_notice"] = _build_open_meteo_fallback_notice(
-                        language=output_language,
-                        rate_limited=open_meteo_rate_limited,
+                    _normalize_units(result, units)
+                    result["condition"] = _translate_condition(
+                        str(result.get("condition") or ""), output_language
                     )
-                else:
-                    result["rate_limit_notice"] = ""
-                result["source_display"] = _build_source_display(
-                    source=str(result.get("source") or ""),
-                    language=output_language,
-                )
-                result["summary"] = _build_summary(result, language=output_language, query_location=location)
-                result["language"] = output_language
-                return result
-            except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
-                if source == "open-meteo":
-                    open_meteo_failed = True
-                    if _is_open_meteo_rate_limited(exc):
-                        open_meteo_rate_limited = True
-                errors[f"{source}({candidate})"] = str(exc)
+                    result["open_meteo_compliance_notice"] = (
+                        _build_open_meteo_compliance_notice(language=output_language)
+                        if result.get("source") == "open-meteo"
+                        else ""
+                    )
+                    if result.get("source") == "wttr" and open_meteo_failed:
+                        result["rate_limit_notice"] = _build_open_meteo_fallback_notice(
+                            language=output_language,
+                            rate_limited=open_meteo_rate_limited,
+                        )
+                    else:
+                        result["rate_limit_notice"] = ""
+                    result["source_display"] = _build_source_display(
+                        source=str(result.get("source") or ""),
+                        language=output_language,
+                    )
+                    result["summary"] = _build_summary(result, language=output_language, query_location=location)
+                    result["language"] = output_language
+                    return result
+                except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
+                    if source == "open-meteo":
+                        open_meteo_failed = True
+                        if _is_open_meteo_rate_limited(exc):
+                            open_meteo_rate_limited = True
+                    errors[f"{source}({candidate})"] = str(exc)
 
-    detail = "; ".join([f"{name}: {msg}" for name, msg in errors.items()]) or "unknown error"
-    raise WeatherLookupError(f"All weather sources failed. {detail}")
+        detail = "; ".join([f"{name}: {msg}" for name, msg in errors.items()]) or "unknown error"
+        raise WeatherLookupError(f"All weather sources failed. {detail}")
+    finally:
+        if session is None:
+            active_session.close()
