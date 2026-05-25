@@ -13,7 +13,7 @@ identity:
     zh_Hant: 支援多語言翻譯與中文地名定位的天氣工具集（wttr.in + Open-Meteo）。
     ja_JP: 多言語翻訳とCJK対応ジオロケーションを備えた天気ツールキット（wttr.in + Open-Meteo）。
     ko_KR: 다국어 출력과 CJK 인식 지오로케이션을 갖춘 날씨 툴킷 (wttr.in + Open-Meteo).
-  icon: _assets/icon.svg
+  icon: icon.svg
   tags:
   - weather
 tools:
