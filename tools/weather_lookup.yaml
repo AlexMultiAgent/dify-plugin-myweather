@@ -7,7 +7,7 @@ identity:
     zh_Hant: 天氣查詢
     ja_JP: 天気検索
     ko_KR: 날씨 검색
-  icon: _assets/icon.svg
+  icon: icon.svg
 description:
   human:
     en_US: Get current weather with no API key, with multi-language translation and CJK-aware geolocation.

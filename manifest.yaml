@@ -22,7 +22,7 @@ description:
   ko_KR: >
     API 키가 필요 없는 다국어 날씨 플러그인, CJK 인식 지오코딩 지원 (wttr.in + Open-Meteo).
     영어, 중국어 간체, 중국어 번체, 일본어, 한국어를 지원합니다.
-icon: _assets/icon.svg
+icon: icon.svg
 created_at: '2026-04-08T00:00:00Z'
 resource:
   memory: 1048576
