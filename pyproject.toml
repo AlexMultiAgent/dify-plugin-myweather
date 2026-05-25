@@ -1,7 +1,7 @@
 [project]
 name = "dify-weather-plugin"
 version = "0.1.2"
-description = "Dify weather plugin with bilingual output and switchable primary source (Open-Meteo or wttr.in)."
+description = "Dify weather plugin with multi-language output and switchable primary source (Open-Meteo or wttr.in)."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

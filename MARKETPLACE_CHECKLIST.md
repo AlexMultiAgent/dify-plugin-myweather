@@ -4,7 +4,7 @@ Check each item before submitting to the Dify Marketplace.
 
 ## Manifest
 
-- [ ] `manifest.yaml` version matches the packaged `.difypkg` version
+- [ ] `manifest.yaml` version matches the packaged `.difypkg` version AND the `USER_AGENT` string in `tools/weather_logic.py`
 - [ ] `author` field is consistent across `manifest.yaml`, `provider/myweather.yaml`, and `tools/weather_lookup.yaml`
 - [ ] `created_at` reflects the initial publish date (`2026-04-08T00:00:00Z`)
 - [ ] `icon` points to `_assets/icon.svg`

@@ -142,6 +142,7 @@ WEATHER_TRANSLATIONS_ZH_HANS = {
     'torrential rain shower': '暴阵雨',
     'tropical storm': '热带风暴',
     'typhoon': '台风',
+    'yellow dust': '黄沙',
     'unknown': '未知',
     'very heavy rain': '暴雨',
     'violent rain showers': '强阵雨',
@@ -410,6 +411,8 @@ WEATHER_TRANSLATIONS_JA = {
     "possible": "可能性あり",
     "likely": "見込み",
     "chance of": "確率",
+    # Yellow dust
+    "yellow dust": "黄砂",
     # Fallback
     "unknown": "不明",
 }

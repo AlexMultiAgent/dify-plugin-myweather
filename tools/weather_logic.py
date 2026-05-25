@@ -18,6 +18,7 @@ WTTR_BASE_URL = "https://wttr.in"
 OPEN_METEO_GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 DEFAULT_TIMEOUT = 12
+# When updating the plugin version, also update manifest.yaml and pyproject.toml.
 USER_AGENT = "dify-myweather-plugin/0.1.2"
 OPEN_METEO_SITE_URL = "https://open-meteo.com"
 OPEN_METEO_LICENCE_URL = "https://open-meteo.com/en/licence"
@@ -325,7 +326,7 @@ def _translate_condition(condition: str, language: str) -> str:
     if language == "en-US":
         return condition
     key = _normalize_condition_key(condition)
-    trans_map = _TRANSLATION_MAP.get(language, WEATHER_TRANSLATIONS_ZH_HANS)
+    trans_map = _TRANSLATION_MAP.get(language)
     if trans_map is None:
         return condition
     return trans_map.get(key, condition or trans_map.get("unknown", "Unknown"))
@@ -533,13 +534,7 @@ def _normalize_cjk_location_display(text: str, language: str = "zh-Hans") -> str
     fragments = _extract_cjk_location_fragments(text or "", language)
     if fragments:
         return fragments[0]
-
-    cleaned = text or ""
-    noise_tokens = _NOISE_TOKENS_MAP.get(language, ZH_HANS_QUERY_NOISE_TOKENS)
-    for token in noise_tokens:
-        cleaned = cleaned.replace(token, "")
-
-    cleaned = re.sub(r"[？！!。；;：:（）\[\]{}?]", " ", cleaned)
+    cleaned = re.sub(r"[？！!。；;：:（）\[\]{}?]", " ", text or "")
     cleaned = re.sub(r"\s+", " ", cleaned).strip("，,。.;； ")
     return cleaned or text
 
@@ -780,100 +775,81 @@ def _build_source_display(source: str, language: str = "en-US") -> str:
     return f"Source: {source_name}."
 
 
+_CJK_FORMAT: dict[str, dict[str, str]] = {
+    "zh-Hans": {
+        "sep_location": "：",
+        "sep_end": "。",
+        "sep_item": "，",
+        "temp_label": "温度",
+        "feels_label": "体感",
+        "humidity_label": "湿度",
+        "wind_label": "风速",
+        "wind_unit_metric": "公里/小时",
+        "wind_unit_uscs": "英里/小时",
+    },
+    "zh-Hant": {
+        "sep_location": "：",
+        "sep_end": "。",
+        "sep_item": "，",
+        "temp_label": "溫度",
+        "feels_label": "體感",
+        "humidity_label": "濕度",
+        "wind_label": "風速",
+        "wind_unit_metric": "公里/小時",
+        "wind_unit_uscs": "英里/小時",
+    },
+    "ja": {
+        "sep_location": "：",
+        "sep_end": "。",
+        "sep_item": "、",
+        "temp_label": "気温",
+        "feels_label": "体感",
+        "humidity_label": "湿度",
+        "wind_label": "風速",
+        "wind_unit_metric": "km/h",
+        "wind_unit_uscs": "mph",
+    },
+    "ko": {
+        "sep_location": ": ",
+        "sep_end": ". ",
+        "sep_item": ", ",
+        "temp_label": "기온",
+        "feels_label": "체감",
+        "humidity_label": "습도",
+        "wind_label": "풍속",
+        "wind_unit_metric": "km/h",
+        "wind_unit_uscs": "mph",
+    },
+}
+
+
 def _build_summary(data: dict[str, Any], language: str = "en-US", query_location: str | None = None) -> str:
     humidity = data.get("humidity")
     temp = data.get("temperature")
     feels = data.get("feels_like")
     wind = data.get("wind_speed")
+    is_metric = data.get("wind_speed_unit") == "km/h"
+    temp_unit = "°C" if data.get("temperature_unit") == "degC" else "°F"
 
-    if language == "zh-Hans":
+    fmt = _CJK_FORMAT.get(language)
+    if fmt is not None:
         unknown_label = _translate_condition("unknown", language)
         humidity_txt = f"{humidity}%" if humidity is not None else unknown_label
         temp_txt = unknown_label if temp is None else f"{temp}"
         feels_txt = unknown_label if feels is None else f"{feels}"
         wind_txt = unknown_label if wind is None else f"{wind}"
-        temp_unit = "°C" if data.get("temperature_unit") == "degC" else "°F"
-        wind_unit = "公里/小时" if data.get("wind_speed_unit") == "km/h" else "英里/小时"
+        wind_unit = fmt["wind_unit_metric"] if is_metric else fmt["wind_unit_uscs"]
         location_display = (
             _normalize_cjk_location_display(query_location, language)
             if query_location and _contains_cjk_chars(query_location)
             else data.get("location")
         )
         weather_line = (
-            f"{location_display}：{data.get('condition')}。"
-            f"温度 {temp_txt}{temp_unit}，"
-            f"体感 {feels_txt}{temp_unit}，"
-            f"湿度 {humidity_txt}，"
-            f"风速 {wind_txt} {wind_unit}。"
-        )
-        fallback_notice = str(data.get("rate_limit_notice") or "").strip()
-        return "\n".join([weather_line, fallback_notice]) if fallback_notice else weather_line
-
-    if language == "zh-Hant":
-        unknown_label = _translate_condition("unknown", language)
-        humidity_txt = f"{humidity}%" if humidity is not None else unknown_label
-        temp_txt = unknown_label if temp is None else f"{temp}"
-        feels_txt = unknown_label if feels is None else f"{feels}"
-        wind_txt = unknown_label if wind is None else f"{wind}"
-        temp_unit = "°C" if data.get("temperature_unit") == "degC" else "°F"
-        wind_unit = "公里/小時" if data.get("wind_speed_unit") == "km/h" else "英里/小時"
-        location_display = (
-            _normalize_cjk_location_display(query_location, language)
-            if query_location and _contains_cjk_chars(query_location)
-            else data.get("location")
-        )
-        weather_line = (
-            f"{location_display}：{data.get('condition')}。"
-            f"溫度 {temp_txt}{temp_unit}，"
-            f"體感 {feels_txt}{temp_unit}，"
-            f"濕度 {humidity_txt}，"
-            f"風速 {wind_txt} {wind_unit}。"
-        )
-        fallback_notice = str(data.get("rate_limit_notice") or "").strip()
-        return "\n".join([weather_line, fallback_notice]) if fallback_notice else weather_line
-
-    if language == "ja":
-        unknown_label = _translate_condition("unknown", language)
-        humidity_txt = f"{humidity}%" if humidity is not None else unknown_label
-        temp_txt = unknown_label if temp is None else f"{temp}"
-        feels_txt = unknown_label if feels is None else f"{feels}"
-        wind_txt = unknown_label if wind is None else f"{wind}"
-        temp_unit = "°C" if data.get("temperature_unit") == "degC" else "°F"
-        wind_unit = "km/h" if data.get("wind_speed_unit") == "km/h" else "mph"
-        location_display = (
-            _normalize_cjk_location_display(query_location, language)
-            if query_location and _contains_cjk_chars(query_location)
-            else data.get("location")
-        )
-        weather_line = (
-            f"{location_display}：{data.get('condition')}。"
-            f"気温 {temp_txt}{temp_unit}、"
-            f"体感 {feels_txt}{temp_unit}、"
-            f"湿度 {humidity_txt}、"
-            f"風速 {wind_txt} {wind_unit}。"
-        )
-        fallback_notice = str(data.get("rate_limit_notice") or "").strip()
-        return "\n".join([weather_line, fallback_notice]) if fallback_notice else weather_line
-
-    if language == "ko":
-        unknown_label = _translate_condition("unknown", language)
-        humidity_txt = f"{humidity}%" if humidity is not None else unknown_label
-        temp_txt = unknown_label if temp is None else f"{temp}"
-        feels_txt = unknown_label if feels is None else f"{feels}"
-        wind_txt = unknown_label if wind is None else f"{wind}"
-        temp_unit = "°C" if data.get("temperature_unit") == "degC" else "°F"
-        wind_unit = "km/h" if data.get("wind_speed_unit") == "km/h" else "mph"
-        location_display = (
-            _normalize_cjk_location_display(query_location, language)
-            if query_location and _contains_cjk_chars(query_location)
-            else data.get("location")
-        )
-        weather_line = (
-            f"{location_display}: {data.get('condition')}. "
-            f"기온 {temp_txt}{temp_unit}, "
-            f"체감 {feels_txt}{temp_unit}, "
-            f"습도 {humidity_txt}, "
-            f"풍속 {wind_txt} {wind_unit}."
+            f"{location_display}{fmt['sep_location']}{data.get('condition')}{fmt['sep_end']}"
+            f"{fmt['temp_label']} {temp_txt}{temp_unit}{fmt['sep_item']}"
+            f"{fmt['feels_label']} {feels_txt}{temp_unit}{fmt['sep_item']}"
+            f"{fmt['humidity_label']} {humidity_txt}{fmt['sep_item']}"
+            f"{fmt['wind_label']} {wind_txt} {wind_unit}{fmt['sep_end']}"
         )
         fallback_notice = str(data.get("rate_limit_notice") or "").strip()
         return "\n".join([weather_line, fallback_notice]) if fallback_notice else weather_line
