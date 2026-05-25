@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from unittest.mock import Mock, patch
+
 import pytest
+import requests
 from tools.weather_logic import (
     _build_summary,
     _c_to_f,
@@ -9,11 +12,14 @@ from tools.weather_logic import (
     _detect_language,
     _extract_cjk_location_fragments,
     _f_to_c,
+    _fetch_from_open_meteo,
+    _fetch_from_wttr,
     _kmh_to_mph,
     _normalize_cjk_location_display,
     _normalize_condition_key,
     _normalize_units,
     _resolve_language,
+    _retry_request,
     _round_or_none,
     _select_open_meteo_candidate,
     _to_float,
@@ -255,7 +261,8 @@ def test_to_float():
 
 def test_to_int():
     assert _to_int("42") == 42
-    assert _to_int(3.9) == 3
+    assert _to_int(3.9) == 4
+    assert _to_int(3.2) == 3
     assert _to_int(None) is None
     assert _to_int("abc") is None
 
@@ -354,6 +361,10 @@ def test_as_bool_strings():
     assert _as_bool("false") is False
     assert _as_bool("0") is False
     assert _as_bool("no") is False
+    assert _as_bool("off") is False
+    assert _as_bool("disabled") is False
+    assert _as_bool("n") is False
+    assert _as_bool("random_string") is False
 
 
 def test_as_bool_numbers():
@@ -427,6 +438,55 @@ def test_build_summary_null_values_use_placeholder():
 
 
 # ---------------------------------------------------------------------------
+# _candidate_locations — word-boundary noise removal
+# ---------------------------------------------------------------------------
+from tools.weather_logic import _candidate_locations
+
+
+def test_candidate_locations_does_not_corrupt_short_token_names():
+    # "now" must not match inside "Snowville", "in" must not match inside "Beijing"
+    candidates = _candidate_locations("Snowville weather now")
+    assert any("Snowville" in c for c in candidates)
+
+    candidates = _candidate_locations("Beijing weather today")
+    assert any("Beijing" in c for c in candidates)
+
+    candidates = _candidate_locations("Atlanta forecast")
+    assert any("Atlanta" in c for c in candidates)
+
+
+def test_candidate_locations_removes_standalone_noise_words():
+    candidates = _candidate_locations("weather in London today")
+    assert any("London" in c for c in candidates)
+
+
+# ---------------------------------------------------------------------------
+# _select_open_meteo_candidate — defensive empty check
+# ---------------------------------------------------------------------------
+def test_select_candidate_empty_list_raises():
+    with pytest.raises(ValueError, match="empty"):
+        _select_open_meteo_candidate([], "Tokyo")
+
+
+# ---------------------------------------------------------------------------
+# _resolve_language — kanji + country hint disambiguation
+# ---------------------------------------------------------------------------
+def test_resolve_language_kanji_with_jp_hint():
+    # Pure kanji (no kana) is ambiguous, but JP country hint disambiguates
+    assert _resolve_language("auto", "東京") == "ja"
+
+
+def test_resolve_language_kanji_with_kr_hint():
+    # Pure CJK with KR hint should resolve to Korean
+    assert _resolve_language("auto", "서울") == "ko"
+
+
+def test_resolve_language_kanji_without_hint_defaults_zh_hans():
+    # "北京" has CN hint implicitly, but no JP/KR hint, so stays zh-Hans
+    assert _resolve_language("auto", "北京") == "zh-Hans"
+
+
+# ---------------------------------------------------------------------------
 # WeatherLookupError
 # ---------------------------------------------------------------------------
 def test_weather_lookup_error():
@@ -450,3 +510,321 @@ def test_get_weather_invalid_units():
 def test_get_weather_invalid_source():
     with pytest.raises(WeatherLookupError, match="source_preference"):
         get_weather("London", preferred_source="invalid")
+
+
+# ---------------------------------------------------------------------------
+# Mock fixtures for upstream API responses
+# ---------------------------------------------------------------------------
+
+def _mock_wttr_response(location="London", temp_c="22.0", temp_f="72.0",
+                        feels_c="20.0", feels_f="68.0", humidity="75",
+                        wind_kmh="15.0", condition="Clear"):
+    return {
+        "current_condition": [{
+            "temp_C": temp_c,
+            "temp_F": temp_f,
+            "FeelsLikeC": feels_c,
+            "FeelsLikeF": feels_f,
+            "humidity": humidity,
+            "windspeedKmph": wind_kmh,
+            "weatherDesc": [{"value": condition}],
+        }],
+        "nearest_area": [{
+            "areaName": [{"value": location}],
+            "region": [{"value": "Test Region"}],
+            "country": [{"value": "Test Country"}],
+        }],
+    }
+
+
+def _mock_open_meteo_geocode_response(name="London", country_code="GB",
+                                       feature_code="PPLC", population=9000000,
+                                       lat=51.5, lon=-0.1):
+    return {
+        "results": [{
+            "name": name,
+            "country_code": country_code,
+            "feature_code": feature_code,
+            "population": population,
+            "latitude": lat,
+            "longitude": lon,
+            "admin1": "Test Admin",
+            "country": "Test Country",
+        }],
+    }
+
+
+def _mock_open_meteo_forecast_response(temp_c=15.5, feels_c=14.0, humidity=68,
+                                        wind_kmh=12.3, weather_code=1):
+    return {
+        "current": {
+            "temperature_2m": temp_c,
+            "apparent_temperature": feels_c,
+            "relative_humidity_2m": humidity,
+            "wind_speed_10m": wind_kmh,
+            "weather_code": weather_code,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# _retry_request
+# ---------------------------------------------------------------------------
+
+def test_retry_request_succeeds_first_attempt():
+    session = Mock(spec=requests.Session)
+    mock_response = Mock(spec=requests.Response)
+    mock_response.raise_for_status.return_value = None
+    session.request.return_value = mock_response
+
+    result = _retry_request("GET", "http://example.com", session)
+    assert result is mock_response
+    assert session.request.call_count == 1
+
+
+def test_retry_request_retries_on_connection_error():
+    session = Mock(spec=requests.Session)
+    mock_response = Mock(spec=requests.Response)
+    mock_response.raise_for_status.return_value = None
+    session.request.side_effect = [
+        requests.ConnectionError("fail"),
+        requests.ConnectionError("fail"),
+        mock_response,
+    ]
+
+    result = _retry_request("GET", "http://example.com", session)
+    assert result is mock_response
+    assert session.request.call_count == 3
+
+
+def test_retry_request_raises_after_max_retries():
+    session = Mock(spec=requests.Session)
+    session.request.side_effect = requests.ConnectionError("fail")
+
+    with pytest.raises(requests.ConnectionError):
+        _retry_request("GET", "http://example.com", session)
+    assert session.request.call_count == 3  # 1 initial + 2 retries
+
+
+def test_retry_request_does_not_retry_http_error():
+    session = Mock(spec=requests.Session)
+    mock_response = Mock(spec=requests.Response)
+    mock_response.raise_for_status.side_effect = requests.HTTPError("400")
+    session.request.return_value = mock_response
+
+    with pytest.raises(requests.HTTPError):
+        _retry_request("GET", "http://example.com", session)
+    assert session.request.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# _fetch_from_wttr (mocked)
+# ---------------------------------------------------------------------------
+
+def test_fetch_from_wttr_parses_response():
+    session = Mock(spec=requests.Session)
+    mock_resp = Mock(spec=requests.Response)
+    mock_resp.json.return_value = _mock_wttr_response(
+        location="London", temp_c="22.0", temp_f="72.0",
+        humidity="75", wind_kmh="15.0", condition="Clear",
+    )
+    mock_resp.raise_for_status.return_value = None
+    session.request.return_value = mock_resp
+
+    result = _fetch_from_wttr("London", session)
+    assert result["source"] == "wttr"
+    assert result["temperature_c"] == 22.0
+    assert result["temperature_f"] == 72.0
+    assert result["humidity"] == 75
+    assert result["wind_speed_kmh"] == 15.0
+    assert result["condition"] == "Clear"
+    assert result["location"] == "London, Test Region, Test Country"
+
+
+def test_fetch_from_wttr_handles_missing_fields():
+    session = Mock(spec=requests.Session)
+    mock_resp = Mock(spec=requests.Response)
+    mock_resp.json.return_value = {"current_condition": [], "nearest_area": []}
+    mock_resp.raise_for_status.return_value = None
+    session.request.return_value = mock_resp
+
+    result = _fetch_from_wttr("Nowhere", session)
+    assert result["temperature_c"] is None
+    assert result["humidity"] is None
+    assert result["condition"] == "Unknown"
+
+
+# ---------------------------------------------------------------------------
+# _fetch_from_open_meteo (mocked)
+# ---------------------------------------------------------------------------
+
+def test_fetch_from_open_meteo_parses_response():
+    session = Mock(spec=requests.Session)
+    geo_resp = Mock(spec=requests.Response)
+    geo_resp.json.return_value = _mock_open_meteo_geocode_response("London", "GB")
+    geo_resp.raise_for_status.return_value = None
+
+    forecast_resp = Mock(spec=requests.Response)
+    forecast_resp.json.return_value = _mock_open_meteo_forecast_response(
+        temp_c=15.5, feels_c=14.0, humidity=68, wind_kmh=12.3, weather_code=1,
+    )
+    forecast_resp.raise_for_status.return_value = None
+
+    session.request.side_effect = [geo_resp, forecast_resp]
+
+    result = _fetch_from_open_meteo("London", session, language="en-US")
+    assert result["source"] == "open-meteo"
+    assert result["temperature_c"] == 15.5
+    assert result["temperature_f"] == _c_to_f(15.5)
+    assert result["feels_like_c"] == 14.0
+    assert result["humidity"] == 68
+    assert result["wind_speed_kmh"] == 12.3
+    assert result["condition"] == "Mainly clear"
+
+
+# ---------------------------------------------------------------------------
+# get_weather — mocked network calls (full integration)
+# ---------------------------------------------------------------------------
+
+def _build_mock_session(wttr_data=None, geocode_data=None, forecast_data=None,
+                        geocode_side_effect=None, forecast_side_effect=None):
+    """Build a mock session that returns canned wttr / open-meteo responses."""
+    session = Mock(spec=requests.Session)
+
+    def _make_resp(json_body):
+        resp = Mock(spec=requests.Response)
+        resp.json.return_value = json_body
+        resp.raise_for_status.return_value = None
+        return resp
+
+    def request_side_effect(method, url, **kwargs):
+        if "wttr.in" in url:
+            return _make_resp(wttr_data or _mock_wttr_response())
+        if "geocoding" in url:
+            if callable(geocode_side_effect):
+                return geocode_side_effect()
+            return _make_resp(geocode_data or _mock_open_meteo_geocode_response())
+        if "forecast" in url:
+            if callable(forecast_side_effect):
+                return forecast_side_effect()
+            return _make_resp(forecast_data or _mock_open_meteo_forecast_response())
+        raise ValueError(f"Unexpected URL: {url}")
+
+    session.request.side_effect = request_side_effect
+    return session
+
+
+def test_get_weather_wttr_primary_succeeds():
+    session = _build_mock_session()
+    result = get_weather("London", units="metric", preferred_source="wttr",
+                         language="en-US", session=session)
+    assert result["source"] == "wttr"
+    assert result["temperature"] == 22.0
+    assert result["temperature_unit"] == "degC"
+    assert result["language"] == "en-US"
+    assert result["condition"] == "Clear"
+    assert result["summary"] != ""
+    assert result["open_meteo_compliance_notice"] == ""
+    assert result["rate_limit_notice"] == ""
+
+
+def test_get_weather_open_meteo_primary_succeeds():
+    session = _build_mock_session()
+    result = get_weather("London", units="metric", preferred_source="open-meteo",
+                         language="en-US", session=session)
+    assert result["source"] == "open-meteo"
+    assert result["open_meteo_compliance_notice"] != ""
+    assert result["temperature"] == 15.5
+
+
+def test_get_weather_uscs_units():
+    session = _build_mock_session()
+    result = get_weather("London", units="uscs", preferred_source="wttr",
+                         language="en-US", session=session)
+    assert result["temperature_unit"] == "degF"
+    assert result["wind_speed_unit"] == "mph"
+    assert result["temperature"] == 72.0
+
+
+def test_get_weather_fallback_wttr_fails_open_meteo_succeeds():
+    """When wttr is primary but fails, fallback to Open-Meteo should succeed."""
+    session = Mock(spec=requests.Session)
+
+    def make_resp(body):
+        resp = Mock(spec=requests.Response)
+        resp.json.return_value = body
+        resp.raise_for_status.return_value = None
+        return resp
+
+    # wttr.in fails, Open-Meteo geocoding + forecast succeed
+    def side_effect(method, url, **kwargs):
+        if "wttr.in" in url:
+            raise requests.ConnectionError("wttr down")
+        if "geocoding" in url:
+            return make_resp(_mock_open_meteo_geocode_response())
+        if "forecast" in url:
+            return make_resp(_mock_open_meteo_forecast_response())
+        raise ValueError(f"Unexpected URL: {url}")
+
+    session.request.side_effect = side_effect
+
+    result = get_weather("London", preferred_source="wttr", language="en-US", session=session)
+    assert result["source"] == "open-meteo"
+
+
+def test_get_weather_open_meteo_fallback_with_rate_limit_notice():
+    """When Open-Meteo is primary and fails with 429, fallback to wttr.in with rate_limit_notice."""
+    session = Mock(spec=requests.Session)
+
+    # Open-Meteo geocoding raises HTTP 429
+    geo_resp = Mock(spec=requests.Response)
+    geo_resp.status_code = 429
+    http_error = requests.HTTPError("429 Too Many Requests")
+    http_error.response = geo_resp
+    geo_resp.raise_for_status.side_effect = http_error
+
+    # wttr.in succeeds
+    wttr_resp = Mock(spec=requests.Response)
+    wttr_resp.json.return_value = _mock_wttr_response()
+    wttr_resp.raise_for_status.return_value = None
+
+    def side_effect(method, url, **kwargs):
+        if "open-meteo" in url or "geocoding" in url:
+            return geo_resp
+        return wttr_resp
+
+    session.request.side_effect = side_effect
+
+    result = get_weather("London", preferred_source="open-meteo", language="en-US", session=session)
+    assert result["source"] == "wttr"
+    assert "rate limited" in result["rate_limit_notice"].lower()
+    assert "wttr.in" in result["rate_limit_notice"]
+
+
+def test_get_weather_all_sources_fail():
+    session = Mock(spec=requests.Session)
+    session.request.side_effect = requests.ConnectionError("network down")
+
+    with pytest.raises(WeatherLookupError, match="All weather sources failed"):
+        get_weather("London", session=session)
+
+
+def test_get_weather_propagates_language_to_output():
+    session = _build_mock_session()
+    result = get_weather("서울", units="metric", preferred_source="wttr",
+                         language="auto", session=session)
+    assert result["language"] == "ko"
+
+
+def test_get_weather_explicit_language_overrides_auto():
+    session = _build_mock_session()
+    result = get_weather("서울", units="metric", preferred_source="wttr",
+                         language="en-US", session=session)
+    assert result["language"] == "en-US"
+
+
+def test_get_weather_includes_raw_payload():
+    session = _build_mock_session()
+    result = get_weather("London", session=session)
+    assert "raw" in result
+    assert "current_condition" in result["raw"]
