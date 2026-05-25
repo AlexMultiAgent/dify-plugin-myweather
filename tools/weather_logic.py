@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
 import re
+import time
 from typing import Any
 from urllib.parse import quote_plus
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 from tools.translations import (
     WEATHER_CODE_DESCRIPTIONS,
@@ -226,6 +230,37 @@ _SPLIT_MARKERS_MAP = {
 }
 
 
+_RETRY_MAX = 2
+_RETRY_BACKOFF = 1.0
+
+
+def _retry_request(method: str, url: str, session: requests.Session, **kwargs: Any) -> requests.Response:
+    """Issue an HTTP request with retries for transient network errors."""
+    last_exc: Exception | None = None
+    for attempt in range(_RETRY_MAX + 1):
+        try:
+            response = session.request(method, url, **kwargs)
+            response.raise_for_status()
+            return response
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            last_exc = exc
+            if attempt < _RETRY_MAX:
+                delay = _RETRY_BACKOFF * (2 ** attempt)
+                logger.debug(
+                    "Retry %d/%d for %s %s after %.1fs: %s",
+                    attempt + 1,
+                    _RETRY_MAX,
+                    method,
+                    url,
+                    delay,
+                    exc,
+                )
+                time.sleep(delay)
+        except requests.HTTPError:
+            raise
+    raise last_exc  # type: ignore[misc]
+
+
 class WeatherLookupError(RuntimeError):
     """Raised when weather lookup cannot be completed from any source."""
 
@@ -243,7 +278,7 @@ def _to_int(value: Any) -> int | None:
     try:
         if value is None:
             return None
-        return int(float(value))
+        return int(round(float(value)))
     except (TypeError, ValueError):
         return None
 
@@ -289,8 +324,8 @@ def _detect_language(text: str) -> str:
     # Hiragana or Katakana strongly implies Japanese
     if re.search(r"[぀-ゟ゠-ヿ]", text):
         return "ja"
-    # CJK Unified Ideographs or Extension A -> Chinese (default to zh-Hans)
-    if re.search(r"[一-鿿㐀-䶿]", text):
+    # CJK Unified Ideographs, Extension A, or Compatibility Ideographs -> Chinese (default to zh-Hans)
+    if re.search(r"[一-鿿㐀-䶿豈-﫿]", text):
         return "zh-Hans"
     return "en-US"
 
@@ -301,7 +336,16 @@ def _resolve_language(param_language: str | None, location_text: str) -> str:
     if lang not in LANGUAGE_VALUES:
         lang = "auto"
     if lang == "auto":
-        return _detect_language(location_text)
+        detected = _detect_language(location_text)
+        # Kanji-only text is ambiguous (could be zh-Hans or ja). Use country
+        # hints from the location text to disambiguate.
+        if detected == "zh-Hans":
+            hints = _infer_country_hints(location_text)
+            if "JP" in hints:
+                return "ja"
+            if "KR" in hints:
+                return "ko"
+        return detected
     return lang
 
 
@@ -314,7 +358,7 @@ def _contains_cjk_chars(text: str) -> bool:
     """Check if text contains CJK, Japanese, or Korean characters (for display logic)."""
     if not text:
         return False
-    return bool(re.search(r"[一-鿿㐀-䶿぀-ゟ゠-ヿ가-힣]", text))
+    return bool(re.search(r"[一-鿿㐀-䶿豈-﫿぀-ゟ゠-ヿ가-힣]", text))
 
 
 def _normalize_condition_key(condition: str) -> str:
@@ -338,7 +382,7 @@ def _extract_cjk_location_fragments(text: str, language: str = "zh-Hans") -> lis
 
     cleaned = text
     noise_tokens = _NOISE_TOKENS_MAP.get(language, ZH_HANS_QUERY_NOISE_TOKENS)
-    for token in noise_tokens:
+    for token in sorted(noise_tokens, key=len, reverse=True):
         cleaned = cleaned.replace(token, " ")
 
     cleaned = re.sub(r"[？?！!。；;：:（）()\[\]{}]", " ", cleaned)
@@ -438,6 +482,9 @@ def _select_open_meteo_candidate(
     country_hint: str | None = None,
     language: str = "en-US",
 ) -> dict[str, Any]:
+    if not candidates:
+        raise ValueError("candidates must not be empty")
+
     is_cjk = _is_cjk_language(language)
     query_basis = _normalize_cjk_location_display(query, language) if is_cjk else query
     query_key = _normalize_location_key(query_basis)
@@ -505,7 +552,7 @@ def _candidate_locations(query: str, language: str = "en-US") -> list[str]:
     ]
     cleaned_en = lowered
     for token in english_noise:
-        cleaned_en = cleaned_en.replace(token, " ")
+        cleaned_en = re.sub(r"\b" + re.escape(token) + r"\b", " ", cleaned_en)
     cleaned_en = re.sub(r"[^a-z0-9\s\-']", " ", cleaned_en)
     cleaned_en = re.sub(r"\s+", " ", cleaned_en).strip(" -'")
     if cleaned_en and cleaned_en != lowered:
@@ -541,13 +588,15 @@ def _normalize_cjk_location_display(text: str, language: str = "zh-Hans") -> str
 
 def _fetch_from_wttr(location: str, session: requests.Session) -> dict[str, Any]:
     encoded_location = quote_plus(location.strip())
-    response = session.get(
+    logger.info("Fetching weather from wttr.in for location=%s", location)
+    response = _retry_request(
+        "GET",
         f"{WTTR_BASE_URL}/{encoded_location}",
+        session,
         params={"format": "j1"},
         timeout=DEFAULT_TIMEOUT,
         headers={"User-Agent": USER_AGENT},
     )
-    response.raise_for_status()
 
     payload = response.json()
     current = (payload.get("current_condition") or [{}])[0]
@@ -599,17 +648,30 @@ def _fetch_from_open_meteo(location: str, session: requests.Session, language: s
     geocode_errors: list[str] = []
 
     for geocode_params in _build_open_meteo_geocode_params(location, language):
-        geocode_resp = session.get(
+        logger.debug(
+            "Open-Meteo geocoding attempt: location=%s language=%s countryCode=%s",
+            location,
+            geocode_params.get("language"),
+            geocode_params.get("countryCode", "*"),
+        )
+        geocode_resp = _retry_request(
+            "GET",
             OPEN_METEO_GEOCODING_URL,
+            session,
             params=geocode_params,
             timeout=DEFAULT_TIMEOUT,
             headers={"User-Agent": USER_AGENT},
         )
-        geocode_resp.raise_for_status()
         payload = geocode_resp.json()
 
         candidates = payload.get("results") or []
         if not candidates:
+            logger.debug(
+                "Open-Meteo geocoding no-match: location=%s language=%s countryCode=%s",
+                location,
+                geocode_params.get("language"),
+                geocode_params.get("countryCode", "*"),
+            )
             geocode_errors.append(
                 f"language={geocode_params.get('language')},countryCode={geocode_params.get('countryCode', '*')}:no-match"
             )
@@ -629,6 +691,13 @@ def _fetch_from_open_meteo(location: str, session: requests.Session, language: s
         match = candidate
         latitude = candidate_lat
         longitude = candidate_lon
+        logger.info(
+            "Open-Meteo geocoding matched: %s (%s, %s) country=%s",
+            match.get("name"),
+            latitude,
+            longitude,
+            match.get("country_code", "?"),
+        )
         break
 
     if match is None or geocode_payload is None or latitude is None or longitude is None:
@@ -637,8 +706,10 @@ def _fetch_from_open_meteo(location: str, session: requests.Session, language: s
 
     resolved_location = _clean_join([match.get("name"), match.get("admin1"), match.get("country")]) or location
 
-    weather_resp = session.get(
+    weather_resp = _retry_request(
+        "GET",
         OPEN_METEO_FORECAST_URL,
+        session,
         params={
             "latitude": latitude,
             "longitude": longitude,
@@ -656,7 +727,6 @@ def _fetch_from_open_meteo(location: str, session: requests.Session, language: s
         timeout=DEFAULT_TIMEOUT,
         headers={"User-Agent": USER_AGENT},
     )
-    weather_resp.raise_for_status()
     weather_payload = weather_resp.json()
 
     current = weather_payload.get("current") or {}
@@ -734,9 +804,7 @@ def _is_open_meteo_rate_limited(exc: Exception) -> bool:
         response = getattr(exc, "response", None)
         if response is not None and getattr(response, "status_code", None) == 429:
             return True
-
-    text = str(exc).lower()
-    return "429" in text or "too many requests" in text
+    return False
 
 
 def _build_open_meteo_fallback_notice(language: str = "en-US", rate_limited: bool = False) -> str:
@@ -829,10 +897,10 @@ def _build_summary(data: dict[str, Any], language: str = "en-US", query_location
     feels = data.get("feels_like")
     wind = data.get("wind_speed")
     is_metric = data.get("wind_speed_unit") == "km/h"
-    temp_unit = "°C" if data.get("temperature_unit") == "degC" else "°F"
 
     fmt = _CJK_FORMAT.get(language)
     if fmt is not None:
+        temp_unit_symbol = "°C" if data.get("temperature_unit") == "degC" else "°F"
         unknown_label = _translate_condition("unknown", language)
         humidity_txt = f"{humidity}%" if humidity is not None else unknown_label
         temp_txt = unknown_label if temp is None else f"{temp}"
@@ -846,8 +914,8 @@ def _build_summary(data: dict[str, Any], language: str = "en-US", query_location
         )
         weather_line = (
             f"{location_display}{fmt['sep_location']}{data.get('condition')}{fmt['sep_end']}"
-            f"{fmt['temp_label']} {temp_txt}{temp_unit}{fmt['sep_item']}"
-            f"{fmt['feels_label']} {feels_txt}{temp_unit}{fmt['sep_item']}"
+            f"{fmt['temp_label']} {temp_txt}{temp_unit_symbol}{fmt['sep_item']}"
+            f"{fmt['feels_label']} {feels_txt}{temp_unit_symbol}{fmt['sep_item']}"
             f"{fmt['humidity_label']} {humidity_txt}{fmt['sep_item']}"
             f"{fmt['wind_label']} {wind_txt} {wind_unit}{fmt['sep_end']}"
         )
@@ -858,14 +926,14 @@ def _build_summary(data: dict[str, Any], language: str = "en-US", query_location
     temp_txt = "n/a" if temp is None else f"{temp}"
     feels_txt = "n/a" if feels is None else f"{feels}"
     wind_txt = "n/a" if wind is None else f"{wind}"
-    temp_unit = data.get("temperature_unit") or "degC"
-    wind_unit = data.get("wind_speed_unit") or "km/h"
+    temp_unit_display = data.get("temperature_unit") or "degC"
+    wind_unit_display = data.get("wind_speed_unit") or "km/h"
     weather_line = (
         f"{data.get('location')}: {data.get('condition')}. "
-        f"Temp {temp_txt} {temp_unit}, "
-        f"feels like {feels_txt} {temp_unit}, "
+        f"Temp {temp_txt} {temp_unit_display}, "
+        f"feels like {feels_txt} {temp_unit_display}, "
         f"humidity {humidity_txt}, "
-        f"wind {wind_txt} {wind_unit}."
+        f"wind {wind_txt} {wind_unit_display}."
     )
     fallback_notice = str(data.get("rate_limit_notice") or "").strip()
     return "\n".join([weather_line, fallback_notice]) if fallback_notice else weather_line
@@ -933,8 +1001,20 @@ def get_weather(
                     )
                     result["summary"] = _build_summary(result, language=output_language, query_location=location)
                     result["language"] = output_language
+                    logger.info(
+                        "Weather fetch succeeded: source=%s location=%s resolved=%s",
+                        result.get("source"),
+                        location,
+                        result.get("location"),
+                    )
                     return result
                 except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
+                    logger.warning(
+                        "Weather fetch failed: source=%s candidate=%s error=%s",
+                        source,
+                        candidate,
+                        exc,
+                    )
                     if source == "open-meteo":
                         open_meteo_failed = True
                         if _is_open_meteo_rate_limited(exc):
