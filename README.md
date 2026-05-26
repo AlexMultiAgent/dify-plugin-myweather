@@ -12,7 +12,7 @@ MyWeather is a Dify weather plugin that requires no API key.
 
 **English** (input: `London`)
 
-> London, City of London Greater London, United Kingdom: Sunny. Temp 34.0 degC, feels like 33.0 degC, humidity 28%, wind 13.0 km/h.
+> London, City of London Greater London, United Kingdom: Sunny. Temp 34.0°C, feels like 33.0°C, humidity 28%, wind 13.0 km/h.
 
 **Chinese** (input: `哈尔滨`)
 
