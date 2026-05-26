@@ -17,6 +17,10 @@ __pycache__/
 .vscode/
 .idea/
 
+# Claude Code
+.claude/
+.playwright-mcp/
+
 # OS
 .DS_Store
 Thumbs.db
