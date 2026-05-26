@@ -106,14 +106,13 @@ class WeatherLookupTool(Tool):
             return
 
         for field in _OUTPUT_FIELDS:
-            value = weather.get(field, "en-US") if field == "language" else weather[field]
-            yield self.create_variable_message(field, value)
+            yield self.create_variable_message(field, weather[field])
 
         if include_raw_json:
             yield self.create_json_message(weather)
         else:
             yield self.create_json_message(
-                {field: (weather.get(field, "en-US") if field == "language" else weather[field]) for field in _OUTPUT_FIELDS}
+                {field: weather[field] for field in _OUTPUT_FIELDS}
             )
 
         yield self.create_text_message(weather["summary"])
