@@ -7,7 +7,7 @@ Check each item before submitting to the Dify Marketplace.
 - [ ] `manifest.yaml` version matches the packaged `.difypkg` version AND the `USER_AGENT` string in `tools/weather_logic.py`
 - [ ] `author` field is consistent across `manifest.yaml`, `provider/myweather.yaml`, and `tools/weather_lookup.yaml`
 - [ ] `created_at` reflects the initial publish date (`2026-04-08T00:00:00Z`)
-- [ ] `icon` points to `_assets/icon.svg`
+- [ ] `icon` points to `icon.svg`
 - [ ] `privacy` points to `./PRIVACY.md`
 - [ ] `tags` are valid Dify enum values (`weather`)
 - [ ] `meta.runner.language` is `python` and `version` matches the tested runtime (`3.12`)

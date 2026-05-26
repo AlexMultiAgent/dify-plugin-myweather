@@ -4,7 +4,7 @@ from typing import Any
 from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
 
-from tools.weather_logic import WeatherLookupError, _detect_language, get_weather
+from tools.weather_logic import WeatherLookupError, _resolve_language, get_weather
 
 
 def _as_bool(value: Any) -> bool:
@@ -97,11 +97,11 @@ class WeatherLookupTool(Tool):
                 language=language,
             )
         except WeatherLookupError as exc:
-            detected_lang = _detect_language(location)
-            error_text = _error_message(location, str(exc), detected_lang)
+            resolved_lang = _resolve_language(language, location)
+            error_text = _error_message(location, str(exc), resolved_lang)
             for field in _OUTPUT_FIELDS:
-                yield self.create_variable_message(field, _empty_result(detected_lang, location, error_text)[field])
-            yield self.create_json_message(_empty_result(detected_lang, location, error_text))
+                yield self.create_variable_message(field, _empty_result(resolved_lang, location, error_text)[field])
+            yield self.create_json_message(_empty_result(resolved_lang, location, error_text))
             yield self.create_text_message(error_text)
             return
 

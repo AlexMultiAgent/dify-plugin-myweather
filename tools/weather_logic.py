@@ -8,8 +8,6 @@ from urllib.parse import quote_plus
 
 import requests
 
-logger = logging.getLogger(__name__)
-
 from tools.translations import (
     WEATHER_CODE_DESCRIPTIONS,
     WEATHER_TRANSLATIONS_JA,
@@ -17,6 +15,8 @@ from tools.translations import (
     WEATHER_TRANSLATIONS_ZH_HANS,
     WEATHER_TRANSLATIONS_ZH_HANT,
 )
+
+logger = logging.getLogger(__name__)
 
 WTTR_BASE_URL = "https://wttr.in"
 OPEN_METEO_GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"

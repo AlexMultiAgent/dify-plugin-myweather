@@ -7,6 +7,7 @@ import requests
 from tools.weather_logic import (
     _build_summary,
     _c_to_f,
+    _candidate_locations,
     _clean_join,
     _contains_cjk_chars,
     _detect_language,
@@ -440,9 +441,6 @@ def test_build_summary_null_values_use_placeholder():
 # ---------------------------------------------------------------------------
 # _candidate_locations — word-boundary noise removal
 # ---------------------------------------------------------------------------
-from tools.weather_logic import _candidate_locations
-
-
 def test_candidate_locations_does_not_corrupt_short_token_names():
     # "now" must not match inside "Snowville", "in" must not match inside "Beijing"
     candidates = _candidate_locations("Snowville weather now")
