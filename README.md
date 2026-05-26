@@ -8,10 +8,17 @@ MyWeather is a Dify weather plugin that requires no API key.
 - Supports English, Simplified Chinese, Traditional Chinese, Japanese, and Korean input and output
 - Automatic language detection via Unicode script analysis
 
-## Usage Screenshots
+## Example Output
 
-![MyWeather usage EN](docs/screenshots/myweather-usage-en.png)
-![MyWeather usage ZH](docs/screenshots/myweather-usage-zh.png)
+**English** (input: `London`)
+
+> London, City of London Greater London, United Kingdom: Sunny. Temp 34.0°C, feels like 33.0°C, humidity 28%, wind 13.0 km/h.
+
+**Chinese** (input: `哈尔滨`)
+
+> 哈尔滨：晴朗。温度 19.0°C，体感 19.0°C，湿度 33%，风速 11.0 公里/小时。
+
+Workflow: `Start (city) → Weather Lookup → Output`
 
 ## Quick Start
 
