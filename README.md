@@ -47,7 +47,7 @@ Returned by `weather_lookup`:
 - `location`: resolved location name from provider.
 - `condition`: weather condition text (translated when CJK/Japanese output).
 - `temperature`: current temperature in selected units.
-- `temperature_unit`: `degC` or `degF`.
+- `temperature_unit`: `°C` or `°F`.
 - `feels_like`: feels-like temperature.
 - `humidity`: relative humidity percentage.
 - `wind_speed`: wind speed in selected units.

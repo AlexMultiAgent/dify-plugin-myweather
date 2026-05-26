@@ -331,7 +331,7 @@ def test_normalize_units_metric():
     }
     result = _normalize_units(data, "metric")
     assert result["temperature"] == 22.5
-    assert result["temperature_unit"] == "degC"
+    assert result["temperature_unit"] == "°C"
     assert result["wind_speed"] == 15.0
     assert result["wind_speed_unit"] == "km/h"
 
@@ -347,7 +347,7 @@ def test_normalize_units_uscs():
     }
     result = _normalize_units(data, "uscs")
     assert result["temperature"] == 72.5
-    assert result["temperature_unit"] == "degF"
+    assert result["temperature_unit"] == "°F"
     assert result["wind_speed"] == 9.3
     assert result["wind_speed_unit"] == "mph"
 
@@ -405,7 +405,7 @@ def _summary_data(**overrides):
         "wind_speed": 15.0,
         "condition": "Clear sky",
         "location": "Beijing",
-        "temperature_unit": "degC",
+        "temperature_unit": "°C",
         "wind_speed_unit": "km/h",
         "rate_limit_notice": "",
     }
@@ -417,7 +417,7 @@ def test_build_summary_en():
     s = _build_summary(_summary_data(), "en-US")
     assert "Beijing" in s
     assert "Temp" in s
-    assert "degC" in s
+    assert "°C" in s
 
 
 def test_build_summary_zh_hans():
@@ -784,7 +784,7 @@ def test_get_weather_wttr_primary_succeeds():
                          language="en-US", session=session)
     assert result["source"] == "wttr"
     assert result["temperature"] == 22.0
-    assert result["temperature_unit"] == "degC"
+    assert result["temperature_unit"] == "°C"
     assert result["language"] == "en-US"
     assert result["condition"] == "Clear"
     assert result["summary"] != ""
@@ -805,7 +805,7 @@ def test_get_weather_uscs_units():
     session = _build_mock_session()
     result = get_weather("London", units="uscs", preferred_source="wttr",
                          language="en-US", session=session)
-    assert result["temperature_unit"] == "degF"
+    assert result["temperature_unit"] == "°F"
     assert result["wind_speed_unit"] == "mph"
     assert result["temperature"] == 72.0
 

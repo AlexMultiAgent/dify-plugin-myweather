@@ -273,7 +273,8 @@ def _retry_request(method: str, url: str, session: requests.Session, **kwargs: A
                 time.sleep(delay)
             else:
                 raise
-    raise last_exc  # type: ignore[misc]
+    assert last_exc is not None
+    raise last_exc
 
 
 class WeatherLookupError(RuntimeError):
@@ -326,6 +327,11 @@ def _round_or_none(value: float | None, digits: int = 1) -> float | None:
     return round(value, digits)
 
 
+_CJK_RE = re.compile(r"[一-鿿㐀-䶿豈-﫿]")
+# Broader: CJK ideographs + Japanese kana + Korean Hangul
+_EAST_ASIAN_RE = re.compile(r"[一-鿿㐀-䶿豈-﫿぀-ゟ゠-ヿ가-힣]")
+
+
 def _detect_language(text: str) -> str:
     """Detect language from text using Unicode script ranges.
 
@@ -340,7 +346,7 @@ def _detect_language(text: str) -> str:
     if re.search(r"[぀-ゟ゠-ヿ]", text):
         return "ja"
     # CJK Unified Ideographs, Extension A, or Compatibility Ideographs -> Chinese (default to zh-Hans)
-    if re.search(r"[一-鿿㐀-䶿豈-﫿]", text):
+    if _CJK_RE.search(text):
         return "zh-Hans"
     return "en-US"
 
@@ -371,11 +377,12 @@ def _is_cjk_language(language: str) -> bool:
     return language in ("zh-Hans", "zh-Hant", "ja", "ko")
 
 
+# Detects CJK ideographs, Japanese kana, and Korean Hangul — not just CJK.
 def _contains_cjk_chars(text: str) -> bool:
     """Check if text contains CJK, Japanese, or Korean characters (for display logic)."""
     if not text:
         return False
-    return bool(re.search(r"[一-鿿㐀-䶿豈-﫿぀-ゟ゠-ヿ가-힣]", text))
+    return bool(_EAST_ASIAN_RE.search(text))
 
 
 def _normalize_condition_key(condition: str) -> str:
@@ -573,7 +580,7 @@ def _candidate_locations(query: str, language: str = "en-US") -> list[str]:
     cleaned_en = re.sub(r"[^a-z0-9\s\-']", " ", cleaned_en)
     cleaned_en = re.sub(r"\s+", " ", cleaned_en).strip(" -'")
     if cleaned_en and cleaned_en != lowered:
-        candidates.append(cleaned_en.title())
+        candidates.append(cleaned_en)
 
     # CJK query cleanup and segmentation.
     if _is_cjk_language(language):
@@ -776,13 +783,13 @@ def _fetch_from_open_meteo(location: str, session: requests.Session, language: s
 def _normalize_units(data: dict[str, Any], units: str) -> dict[str, Any]:
     if units == "uscs":
         data["temperature"] = _round_or_none(data.get("temperature_f"))
-        data["temperature_unit"] = "degF"
+        data["temperature_unit"] = "°F"
         data["feels_like"] = _round_or_none(data.get("feels_like_f"))
         data["wind_speed"] = _round_or_none(data.get("wind_speed_mph"))
         data["wind_speed_unit"] = "mph"
     else:
         data["temperature"] = _round_or_none(data.get("temperature_c"))
-        data["temperature_unit"] = "degC"
+        data["temperature_unit"] = "°C"
         data["feels_like"] = _round_or_none(data.get("feels_like_c"))
         data["wind_speed"] = _round_or_none(data.get("wind_speed_kmh"))
         data["wind_speed_unit"] = "km/h"
@@ -917,7 +924,7 @@ def _build_summary(data: dict[str, Any], language: str = "en-US", query_location
 
     fmt = _CJK_FORMAT.get(language)
     if fmt is not None:
-        temp_unit_symbol = "°C" if data.get("temperature_unit") == "degC" else "°F"
+        temp_unit_symbol = data.get("temperature_unit") or "°C"
         unknown_label = _translate_condition("unknown", language)
         humidity_txt = f"{humidity}%" if humidity is not None else unknown_label
         temp_txt = unknown_label if temp is None else f"{temp}"
@@ -943,7 +950,7 @@ def _build_summary(data: dict[str, Any], language: str = "en-US", query_location
     temp_txt = "n/a" if temp is None else f"{temp}"
     feels_txt = "n/a" if feels is None else f"{feels}"
     wind_txt = "n/a" if wind is None else f"{wind}"
-    temp_unit_display = data.get("temperature_unit") or "degC"
+    temp_unit_display = data.get("temperature_unit") or "°C"
     wind_unit_display = data.get("wind_speed_unit") or "km/h"
     weather_line = (
         f"{data.get('location')}: {data.get('condition')}. "

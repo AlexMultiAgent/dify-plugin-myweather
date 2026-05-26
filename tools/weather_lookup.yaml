@@ -198,7 +198,7 @@ output_schema:
       description: Current temperature in selected unit system.
     temperature_unit:
       type: string
-      description: Temperature unit symbol.
+      description: Temperature unit symbol (°C or °F).
     feels_like:
       type: number
       description: Feels-like temperature in selected unit system.
