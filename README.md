@@ -130,6 +130,7 @@ This command generates a `.difypkg` file for local install and Marketplace submi
 
 ## Support
 
+- Issues: https://github.com/AlexMultiAgent/dify-plugin-myweather/issues
 - GitHub profile: https://github.com/AlexMultiAgent
 
 ## License
