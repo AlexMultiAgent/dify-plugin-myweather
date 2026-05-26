@@ -486,6 +486,32 @@ def test_resolve_language_kanji_without_hint_defaults_zh_hans():
     assert _resolve_language("auto", "北京") == "zh-Hans"
 
 
+def test_resolve_language_tw_hint_returns_zh_hant():
+    # CJK text with Taiwan country hint → zh-Hant
+    assert _resolve_language("auto", "台北") == "zh-Hant"
+    assert _resolve_language("auto", "臺灣") == "zh-Hant"
+
+
+def test_resolve_language_hk_hint_returns_zh_hant():
+    assert _resolve_language("auto", "香港") == "zh-Hant"
+
+
+def test_resolve_language_mo_hint_returns_zh_hant():
+    assert _resolve_language("auto", "澳门") == "zh-Hant"
+
+
+def test_resolve_language_english_tw_hk_mo_text_returns_en():
+    # Latin text like "Taipei" has no CJK chars → en-US, country hints never checked
+    assert _resolve_language("auto", "Taipei") == "en-US"
+    assert _resolve_language("auto", "Hong Kong") == "en-US"
+    assert _resolve_language("auto", "Macau") == "en-US"
+
+
+def test_resolve_language_explicit_overrides_zh_hant_hint():
+    assert _resolve_language("ja", "台北") == "ja"
+    assert _resolve_language("en-US", "香港") == "en-US"
+
+
 # ---------------------------------------------------------------------------
 # WeatherLookupError
 # ---------------------------------------------------------------------------
@@ -615,6 +641,46 @@ def test_retry_request_does_not_retry_http_error():
     with pytest.raises(requests.HTTPError):
         _retry_request("GET", "http://example.com", session)
     assert session.request.call_count == 1
+
+
+def test_retry_request_retries_on_429():
+    session = Mock(spec=requests.Session)
+    error_resp = Mock(spec=requests.Response)
+    error_resp.status_code = 429
+    success_resp = Mock(spec=requests.Response)
+    success_resp.raise_for_status.return_value = None
+    session.request.side_effect = [
+        requests.HTTPError("429", response=error_resp),
+        success_resp,
+    ]
+    result = _retry_request("GET", "http://example.com", session)
+    assert result is success_resp
+    assert session.request.call_count == 2
+
+
+def test_retry_request_retries_on_503():
+    session = Mock(spec=requests.Session)
+    error_resp = Mock(spec=requests.Response)
+    error_resp.status_code = 503
+    success_resp = Mock(spec=requests.Response)
+    success_resp.raise_for_status.return_value = None
+    session.request.side_effect = [
+        requests.HTTPError("503", response=error_resp),
+        success_resp,
+    ]
+    result = _retry_request("GET", "http://example.com", session)
+    assert result is success_resp
+    assert session.request.call_count == 2
+
+
+def test_retry_request_raises_after_max_429_retries():
+    session = Mock(spec=requests.Session)
+    error_resp = Mock(spec=requests.Response)
+    error_resp.status_code = 429
+    session.request.side_effect = requests.HTTPError("429", response=error_resp)
+    with pytest.raises(requests.HTTPError):
+        _retry_request("GET", "http://example.com", session)
+    assert session.request.call_count == 3
 
 
 # ---------------------------------------------------------------------------

@@ -58,10 +58,30 @@ def _error_message(location: str, exc: str, language: str) -> str:
 class WeatherLookupTool(Tool):
     def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage, None, None]:
         location = str(tool_parameters.get("location", "")).strip()
+        def _empty_result(lang: str, loc: str, error_text: str) -> dict[str, Any]:
+            return {
+                "source": "",
+                "source_display": "",
+                "language": lang,
+                "location": loc,
+                "condition": "",
+                "temperature": None,
+                "temperature_unit": "",
+                "feels_like": None,
+                "humidity": None,
+                "wind_speed": None,
+                "wind_speed_unit": "",
+                "summary": error_text,
+                "open_meteo_compliance_notice": "",
+                "rate_limit_notice": "",
+            }
+
         if not location:
-            yield self.create_text_message(
-                _error_message("(empty)", "Location is required.", "en-US")
-            )
+            error_text = _error_message("(empty)", "Location is required.", "en-US")
+            for field in _OUTPUT_FIELDS:
+                yield self.create_variable_message(field, _empty_result("en-US", "", error_text)[field])
+            yield self.create_json_message(_empty_result("en-US", "", error_text))
+            yield self.create_text_message(error_text)
             return
 
         units = str(tool_parameters.get("units", "metric")).strip() or "metric"
@@ -78,7 +98,11 @@ class WeatherLookupTool(Tool):
             )
         except WeatherLookupError as exc:
             detected_lang = _detect_language(location)
-            yield self.create_text_message(_error_message(location, str(exc), detected_lang))
+            error_text = _error_message(location, str(exc), detected_lang)
+            for field in _OUTPUT_FIELDS:
+                yield self.create_variable_message(field, _empty_result(detected_lang, location, error_text)[field])
+            yield self.create_json_message(_empty_result(detected_lang, location, error_text))
+            yield self.create_text_message(error_text)
             return
 
         for field in _OUTPUT_FIELDS:

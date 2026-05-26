@@ -256,8 +256,23 @@ def _retry_request(method: str, url: str, session: requests.Session, **kwargs: A
                     exc,
                 )
                 time.sleep(delay)
-        except requests.HTTPError:
-            raise
+        except requests.HTTPError as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status in (429, 503) and attempt < _RETRY_MAX:
+                last_exc = exc
+                delay = _RETRY_BACKOFF * (2 ** attempt)
+                logger.debug(
+                    "Retry %d/%d for %s %s after %.1fs: HTTP %s",
+                    attempt + 1,
+                    _RETRY_MAX,
+                    method,
+                    url,
+                    delay,
+                    status,
+                )
+                time.sleep(delay)
+            else:
+                raise
     raise last_exc  # type: ignore[misc]
 
 
@@ -345,6 +360,8 @@ def _resolve_language(param_language: str | None, location_text: str) -> str:
                 return "ja"
             if "KR" in hints:
                 return "ko"
+            if "TW" in hints or "HK" in hints or "MO" in hints:
+                return "zh-Hant"
         return detected
     return lang
 
@@ -381,12 +398,12 @@ def _extract_cjk_location_fragments(text: str, language: str = "zh-Hans") -> lis
         return []
 
     cleaned = text
-    noise_tokens = _NOISE_TOKENS_MAP.get(language, ZH_HANS_QUERY_NOISE_TOKENS)
+    noise_tokens = _NOISE_TOKENS_MAP.get(language, [])
     for token in sorted(noise_tokens, key=len, reverse=True):
         cleaned = cleaned.replace(token, " ")
 
     cleaned = re.sub(r"[？?！!。；;：:（）()\[\]{}]", " ", cleaned)
-    split_markers = _SPLIT_MARKERS_MAP.get(language, ZH_HANS_QUERY_SPLIT_MARKERS)
+    split_markers = _SPLIT_MARKERS_MAP.get(language, [])
     split_pattern = "|".join(sorted([re.escape(item) for item in split_markers], key=len, reverse=True))
     parts = re.split(split_pattern, cleaned) if split_pattern else [cleaned]
 
@@ -551,7 +568,7 @@ def _candidate_locations(query: str, language: str = "en-US") -> list[str]:
         "at",
     ]
     cleaned_en = lowered
-    for token in english_noise:
+    for token in sorted(english_noise, key=len, reverse=True):
         cleaned_en = re.sub(r"\b" + re.escape(token) + r"\b", " ", cleaned_en)
     cleaned_en = re.sub(r"[^a-z0-9\s\-']", " ", cleaned_en)
     cleaned_en = re.sub(r"\s+", " ", cleaned_en).strip(" -'")
