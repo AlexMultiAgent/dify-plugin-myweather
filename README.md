@@ -10,8 +10,8 @@ MyWeather is a Dify weather plugin that requires no API key.
 
 ## Usage Screenshots
 
-![MyWeather usage EN](docs/screenshots/myweather-usage-en.svg)
-![MyWeather usage ZH](docs/screenshots/myweather-usage-zh.svg)
+![MyWeather usage EN](https://raw.githubusercontent.com/AlexMultiAgent/myweather/main/docs/screenshots/myweather-usage-en.svg)
+![MyWeather usage ZH](https://raw.githubusercontent.com/AlexMultiAgent/myweather/main/docs/screenshots/myweather-usage-zh.svg)
 
 ## Quick Start
 
