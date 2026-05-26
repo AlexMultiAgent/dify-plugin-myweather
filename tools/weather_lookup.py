@@ -59,9 +59,27 @@ class WeatherLookupTool(Tool):
     def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage, None, None]:
         location = str(tool_parameters.get("location", "")).strip()
         if not location:
-            yield self.create_text_message(
-                _error_message("(empty)", "Location is required.", "en-US")
-            )
+            error_text = _error_message("(empty)", "Location is required.", "en-US")
+            empty = {
+                "source": "",
+                "source_display": "",
+                "language": "en-US",
+                "location": "",
+                "condition": "",
+                "temperature": None,
+                "temperature_unit": "",
+                "feels_like": None,
+                "humidity": None,
+                "wind_speed": None,
+                "wind_speed_unit": "",
+                "summary": error_text,
+                "open_meteo_compliance_notice": "",
+                "rate_limit_notice": "",
+            }
+            for field in _OUTPUT_FIELDS:
+                yield self.create_variable_message(field, empty[field])
+            yield self.create_json_message(empty)
+            yield self.create_text_message(error_text)
             return
 
         units = str(tool_parameters.get("units", "metric")).strip() or "metric"
@@ -78,7 +96,27 @@ class WeatherLookupTool(Tool):
             )
         except WeatherLookupError as exc:
             detected_lang = _detect_language(location)
-            yield self.create_text_message(_error_message(location, str(exc), detected_lang))
+            error_text = _error_message(location, str(exc), detected_lang)
+            empty = {
+                "source": "",
+                "source_display": "",
+                "language": detected_lang,
+                "location": location,
+                "condition": "",
+                "temperature": None,
+                "temperature_unit": "",
+                "feels_like": None,
+                "humidity": None,
+                "wind_speed": None,
+                "wind_speed_unit": "",
+                "summary": error_text,
+                "open_meteo_compliance_notice": "",
+                "rate_limit_notice": "",
+            }
+            for field in _OUTPUT_FIELDS:
+                yield self.create_variable_message(field, empty[field])
+            yield self.create_json_message(empty)
+            yield self.create_text_message(error_text)
             return
 
         for field in _OUTPUT_FIELDS:

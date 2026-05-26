@@ -62,7 +62,7 @@ Returned by `weather_lookup`:
 Auto-detection rules:
 - Hangul Syllables (U+AC00–U+D7AF) → `ko`
 - Hiragana (U+3040–U+309F) or Katakana (U+30A0–U+30FF) → `ja`
-- CJK Unified Ideographs (U+4E00–U+9FFF) → `zh-Hans`
+- CJK characters → `zh-Hans`
 - Otherwise → `en-US`
 
 ## Compliance Notes
@@ -94,44 +94,10 @@ References:
 - wttr.in Help: https://wttr.in/:help
 - wttr.in Repository: https://github.com/chubin/wttr.in
 
-## Development
-
-```bash
-pip install -r requirements.txt
-python -m main
-```
-
-## Remote Debug (Dify)
-
-1. Copy `.env.example` to `.env`.
-2. Fill `REMOTE_INSTALL_HOST`, `REMOTE_INSTALL_PORT`, and `REMOTE_INSTALL_KEY`.
-3. Run:
-
-```bash
-python -m main
-```
-
-## Packaging
-
-```bash
-dify plugin package ./dify-weather-plugin
-```
-
-This command generates a `.difypkg` file for local install and Marketplace submission.
-
-## Marketplace Notes
-
-- See `MARKETPLACE_CHECKLIST.md` for pre-submit checks.
-- Keep author information consistent in:
-  - `manifest.yaml`
-  - `provider/myweather.yaml`
-  - `tools/weather_lookup.yaml`
-- Keep privacy policy path valid: `privacy: ./PRIVACY.md`.
-
 ## Support
 
-- Issues: https://github.com/AlexMultiAgent/dify-plugin-myweather/issues
 - GitHub profile: https://github.com/AlexMultiAgent
+- GitHub Issues: https://github.com/AlexMultiAgent/dify-plugin-myweather/issues
 
 ## License
 
