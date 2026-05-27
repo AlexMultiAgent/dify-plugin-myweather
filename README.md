@@ -14,10 +14,6 @@ MyWeather is a Dify weather plugin that requires no API key.
 
 > London, City of London Greater London, United Kingdom: Sunny. Temp 34.0°C, feels like 33.0°C, humidity 28%, wind 13.0 km/h.
 
-**Chinese** (input: `哈尔滨`)
-
-> 哈尔滨：晴朗。温度 19.0°C，体感 19.0°C，湿度 33%，风速 11.0 公里/小时。
-
 Workflow: `Start (city) → Weather Lookup → Output`
 
 ## Quick Start
