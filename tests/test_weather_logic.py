@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
 import requests
+import yaml
 from tools.weather_logic import (
     _build_summary,
     _c_to_f,
@@ -15,10 +17,12 @@ from tools.weather_logic import (
     _f_to_c,
     _fetch_from_open_meteo,
     _fetch_from_wttr,
+    _infer_country_hints,
     _kmh_to_mph,
     _normalize_cjk_location_display,
     _normalize_condition_key,
     _normalize_units,
+    _open_meteo_queries,
     _resolve_language,
     _retry_request,
     _round_or_none,
@@ -29,7 +33,7 @@ from tools.weather_logic import (
     WeatherLookupError,
     get_weather,
 )
-from tools.weather_lookup import _as_bool, _error_message
+from tools.weather_lookup import _as_bool, _error_message, _OUTPUT_FIELDS, WeatherLookupTool
 
 
 # ---------------------------------------------------------------------------
@@ -422,8 +426,15 @@ def test_build_summary_en():
 
 def test_build_summary_zh_hans():
     s = _build_summary(_summary_data(condition="晴"), "zh-Hans", "北京")
-    assert "北京" in s
     assert "温度" in s
+    # The provider's resolved place wins over the raw query, otherwise a source
+    # that matched the wrong city would be hidden behind the user's wording.
+    assert "Beijing" in s
+
+
+def test_build_summary_falls_back_to_query_without_resolved_location():
+    s = _build_summary(_summary_data(location=""), "zh-Hans", "北京")
+    assert "北京" in s
 
 
 def test_build_summary_includes_rate_limit_notice():
@@ -889,6 +900,244 @@ def test_get_weather_explicit_language_overrides_auto():
 
 def test_get_weather_includes_raw_payload():
     session = _build_mock_session()
-    result = get_weather("London", session=session)
+    result = get_weather("London", preferred_source="wttr", session=session)
     assert "raw" in result
     assert "current_condition" in result["raw"]
+
+
+# ---------------------------------------------------------------------------
+# Source fallback — Open-Meteo geocoding without a match
+# ---------------------------------------------------------------------------
+def test_get_weather_open_meteo_no_match_falls_back_to_wttr():
+    """Open-Meteo cannot geocode native Japanese/Korean names; wttr.in must take over."""
+    session = _build_mock_session(geocode_data={"results": []})
+    result = get_weather("東京", language="ja", preferred_source="open-meteo", session=session)
+    assert result["source"] == "wttr"
+    assert result["rate_limit_notice"]
+    assert result["temperature"] == 22.0
+
+
+def test_get_weather_open_meteo_no_match_and_wttr_down_raises():
+    session = Mock(spec=requests.Session)
+
+    def side_effect(method, url, **kwargs):
+        if "wttr.in" in url:
+            raise requests.ConnectionError("wttr down")
+        resp = Mock(spec=requests.Response)
+        resp.json.return_value = {"results": []}
+        resp.raise_for_status.return_value = None
+        return resp
+
+    session.request.side_effect = side_effect
+    with pytest.raises(WeatherLookupError, match="All weather sources failed"):
+        get_weather("東京", language="ja", preferred_source="open-meteo", session=session)
+
+
+def test_formatting_error_is_not_reported_as_source_failure():
+    """A bug in this plugin's formatting must not be blamed on the upstream provider."""
+    session = _build_mock_session()
+    with patch("tools.weather_logic._build_summary", side_effect=TypeError("boom")):
+        with pytest.raises(WeatherLookupError, match="Failed to format"):
+            get_weather("London", session=session)
+
+
+def test_fetch_from_wttr_strips_condition_whitespace():
+    session = Mock(spec=requests.Session)
+    mock_resp = Mock(spec=requests.Response)
+    mock_resp.json.return_value = _mock_wttr_response(condition="Partly Cloudy ")
+    mock_resp.raise_for_status.return_value = None
+    session.request.return_value = mock_resp
+
+    result = _fetch_from_wttr("London", session)
+    assert result["condition"] == "Partly Cloudy"
+
+
+# ---------------------------------------------------------------------------
+# Traditional Chinese detection
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "city",
+    ["台中", "臺中", "台南", "臺南", "高雄", "桃園", "桃园", "新竹", "基隆", "新北"],
+)
+def test_resolve_language_taiwan_cities_return_zh_hant(city):
+    assert _resolve_language("auto", city) == "zh-Hant"
+
+
+def test_resolve_language_macau_traditional_returns_zh_hant():
+    assert _resolve_language("auto", "澳門") == "zh-Hant"
+
+
+# ---------------------------------------------------------------------------
+# Tool output contract
+# ---------------------------------------------------------------------------
+def _tool_yaml() -> dict:
+    yaml_path = Path(__file__).resolve().parents[1] / "tools" / "weather_lookup.yaml"
+    with yaml_path.open(encoding="utf-8") as handle:
+        return yaml.safe_load(handle)
+
+
+def test_output_schema_covers_every_emitted_field():
+    declared = set(_tool_yaml()["output_schema"]["properties"].keys())
+    assert declared == set(_OUTPUT_FIELDS) | {"raw"}
+
+
+def _wttr_request_stub(self, method, url, **kwargs):
+    resp = Mock(spec=requests.Response)
+    resp.json.return_value = _mock_wttr_response()
+    resp.raise_for_status.return_value = None
+    resp.status_code = 200
+    return resp
+
+
+def _invoke_tool(tool_parameters):
+    tool = WeatherLookupTool.from_credentials({})
+    with patch.object(requests.Session, "request", _wttr_request_stub):
+        return list(tool.invoke(tool_parameters))
+
+
+def _json_payload(messages):
+    for message in messages:
+        if message.type.name == "JSON":
+            return message.message.json_object
+    raise AssertionError("no JSON message emitted")
+
+
+def test_json_payload_matches_output_schema():
+    payload = _json_payload(_invoke_tool({"location": "London"}))
+    assert set(payload.keys()) == set(_OUTPUT_FIELDS)
+
+
+def test_include_raw_json_emits_only_declared_keys():
+    payload = _json_payload(_invoke_tool({"location": "London", "include_raw_json": True}))
+    assert set(payload.keys()) == set(_OUTPUT_FIELDS) | {"raw"}
+    assert "current_condition" in payload["raw"]
+
+
+def test_tool_emits_every_declared_variable():
+    messages = _invoke_tool({"location": "London"})
+    variables = {
+        message.message.variable_name
+        for message in messages
+        if message.type.name == "VARIABLE"
+    }
+    assert variables == set(_OUTPUT_FIELDS)
+
+
+def test_error_message_without_location_omits_placeholder():
+    message = _error_message("", "Location is required.", "en-US")
+    assert "(empty)" not in message
+    assert "Location is required." in message
+
+
+# ---------------------------------------------------------------------------
+# Transliteration-aware geocoding queries
+# ---------------------------------------------------------------------------
+def test_open_meteo_queries_romanizes_hangul():
+    queries = _open_meteo_queries("서울", "ko")
+    assert queries[0] == ("seoul", "en")
+    assert ("서울", "ko") in queries
+
+
+def test_open_meteo_queries_romanizes_kana():
+    queries = _open_meteo_queries("とうきょう", "ja")
+    assert queries[0] == ("tokyo", "en")
+
+
+def test_open_meteo_queries_expands_japanese_place_names():
+    queries = _open_meteo_queries("横浜", "ja")
+    assert queries[:2] == [("横浜市", "ja"), ("横浜都", "ja")]
+    assert ("横浜", "ja") in queries
+
+
+def test_open_meteo_queries_keeps_chinese_names_as_is():
+    queries = _open_meteo_queries("北京", "zh-Hans")
+    assert queries[0] == ("北京", "zh")
+
+
+def test_open_meteo_queries_leaves_latin_names_alone():
+    assert _open_meteo_queries("London", "en-US") == [("London", "en")]
+
+
+def test_open_meteo_queries_uses_latin_alias_for_taiwan():
+    queries = _open_meteo_queries("台北", "zh-Hant")
+    assert queries[0] == ("Taipei", "en")
+
+
+def test_open_meteo_queries_keeps_mainland_chinese_name_first():
+    queries = _open_meteo_queries("北京", "zh-Hans")
+    assert queries[0] == ("北京", "zh")
+
+
+def test_open_meteo_queries_strips_query_noise_before_romanizing():
+    queries = _open_meteo_queries("서울 날씨", "ko")
+    assert queries[0] == ("seoul", "en")
+
+
+def test_open_meteo_queries_does_not_fragment_a_pure_kana_name():
+    # "きょうと" must stay whole; "きょう" resolves to Kyo in Comoros.
+    assert _open_meteo_queries("きょうと", "ja") == [("kyoto", "en"), ("きょうと", "ja")]
+
+
+def test_kana_input_is_treated_as_japanese():
+    assert _infer_country_hints("きょうと") == ["JP"]
+
+
+def test_get_weather_uses_open_meteo_for_hangul_even_when_wttr_is_preferred():
+    """wttr.in answers native-script Korean with a different place entirely."""
+    session = Mock(spec=requests.Session)
+
+    def side_effect(method, url, **kwargs):
+        if "wttr.in" in url:
+            raise AssertionError("wttr.in must not be queried for Hangul input")
+        resp = Mock(spec=requests.Response)
+        resp.json.return_value = _mock_open_meteo_geocode_response("서울특별시", "KR")
+        resp.raise_for_status.return_value = None
+        return resp
+
+    session.request.side_effect = side_effect
+    result = get_weather("서울", language="ko", preferred_source="wttr", session=session)
+    assert result["source"] == "open-meteo"
+
+
+def test_get_weather_uses_open_meteo_for_kana_even_when_wttr_is_preferred():
+    session = Mock(spec=requests.Session)
+
+    def side_effect(method, url, **kwargs):
+        if "wttr.in" in url:
+            raise AssertionError("wttr.in must not be queried for kana input")
+        resp = Mock(spec=requests.Response)
+        resp.json.return_value = _mock_open_meteo_geocode_response("東京都", "JP")
+        resp.raise_for_status.return_value = None
+        return resp
+
+    session.request.side_effect = side_effect
+    result = get_weather("とうきょう", language="ja", preferred_source="wttr", session=session)
+    assert result["source"] == "open-meteo"
+
+
+def test_get_weather_queries_open_meteo_with_the_romanized_name():
+    session = Mock(spec=requests.Session)
+    requested_names: list[str] = []
+
+    def side_effect(method, url, **kwargs):
+        if "geocoding" in url:
+            requested_names.append(kwargs["params"]["name"])
+            resp = Mock(spec=requests.Response)
+            resp.json.return_value = _mock_open_meteo_geocode_response("서울특별시", "KR")
+            resp.raise_for_status.return_value = None
+            return resp
+        resp = Mock(spec=requests.Response)
+        resp.json.return_value = _mock_open_meteo_forecast_response()
+        resp.raise_for_status.return_value = None
+        return resp
+
+    session.request.side_effect = side_effect
+    get_weather("서울", language="ko", session=session)
+    assert requested_names[0] == "seoul"
+
+
+def test_get_weather_summary_reports_the_resolved_place():
+    session = _build_mock_session()
+    result = get_weather("서울", language="ko", session=session)
+    assert result["location"]
+    assert result["summary"].startswith(result["location"])

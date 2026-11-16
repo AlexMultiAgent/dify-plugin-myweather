@@ -3,16 +3,25 @@
 MyWeather is a Dify weather plugin that requires no API key.
 
 - Primary source is selectable: `open-meteo` or `wttr`
-- Default primary source: `wttr`
+- Default primary source: `open-meteo`
 - Non-primary source is always used as fallback
 - Supports English, Simplified Chinese, Traditional Chinese, Japanese, and Korean input and output
 - Automatic language detection via Unicode script analysis
+- Native-script Japanese and Korean place names are transliterated before geocoding
 
 ## Example Output
 
 **English** (input: `London`)
 
-> London, City of London Greater London, United Kingdom: Sunny. Temp 34.0°C, feels like 33.0°C, humidity 28%, wind 13.0 km/h.
+> London, England, United Kingdom: Partly cloudy. Temp 12.0 °C, feels like 10.5 °C, humidity 72%, wind 11.0 km/h.
+
+**Korean** (input: `서울`)
+
+> Seoul, South Korea: 구름많음. 기온 12.6°C, 체감 10.1°C, 습도 61%, 풍속 7.0 km/h.
+
+**Japanese** (input: `横浜`)
+
+> 横浜市, 神奈川県, 日本：曇り。気温 15.5°C、体感 12.5°C、湿度 51%、風速 9.0 km/h。
 
 Workflow: `Start (city) → Weather Lookup → Output`
 
@@ -21,17 +30,17 @@ Workflow: `Start (city) → Weather Lookup → Output`
 1. Install plugin `MyWeather` in Dify.
 2. Add tool node `Weather Lookup`.
 3. Set `source_preference`:
-   - `wttr` (default): wttr first, Open-Meteo fallback
-   - `open-meteo`: Open-Meteo first, wttr fallback
+   - `open-meteo` (default): Open-Meteo first, wttr fallback
+   - `wttr`: wttr first, Open-Meteo fallback
 4. Pass user location text to `location`.
 
 ## Tool Parameters
 
 - `location` (required): city, region, airport code, or place name. Supports English, Chinese, Japanese, and Korean.
-- `language` (optional): output language. `auto` (default) detects from input — Hangul → Korean, hiragana/katakana → Japanese, CJK → Simplified Chinese, otherwise English. Can be set explicitly to `en-US`, `zh-Hans`, `zh-Hant`, `ja`, or `ko`.
+- `language` (optional): output language. `auto` (default) detects from input — Hangul → Korean, hiragana/katakana → Japanese, CJK → Simplified Chinese (Taiwan / Hong Kong / Macau place names → Traditional Chinese), otherwise English. Can be set explicitly to `en-US`, `zh-Hans`, `zh-Hant`, `ja`, or `ko`.
 - `units` (optional): `metric` or `uscs`.
-- `source_preference` (optional): `wttr` (default) or `open-meteo`.
-- `include_raw_json` (optional): include upstream raw payload in JSON output.
+- `source_preference` (optional): `open-meteo` (default) or `wttr`.
+- `include_raw_json` (optional): include the raw upstream provider payload in the JSON output, under the `raw` key.
 
 ## Output Variables
 
@@ -40,7 +49,7 @@ Returned by `weather_lookup`:
 - `source`: actual provider used (`wttr` or `open-meteo`).
 - `source_display`: UI-ready source label (`Source: wttr.in.` or `Source: Open-Meteo.`).
 - `language`: resolved output language (`en-US`, `zh-Hans`, `zh-Hant`, `ja`, or `ko`).
-- `location`: resolved location name from provider.
+- `location`: the place the provider actually matched, not the raw query.
 - `condition`: weather condition text (translated when CJK/Japanese output).
 - `temperature`: current temperature in selected units.
 - `temperature_unit`: `°C` or `°F`.
@@ -57,15 +66,16 @@ Returned by `weather_lookup`:
 | Language | Detection | Weather Translation | Geocoding |
 | --- | --- | --- | --- |
 | English (en-US) | Default | Passthrough | Standard |
-| Simplified Chinese (zh-Hans) | CJK characters | Full (160+ terms) | `zh` + `en` |
-| Traditional Chinese (zh-Hant) | Explicit only | Full (zh-Hans + override) | `zh` + `en` |
-| Japanese (ja) | Hiragana/Katakana | Full (160+ terms) | `ja` + `en` |
-| Korean (ko) | Hangul | Full (160+ terms) | `ko` + `en` |
+| Simplified Chinese (zh-Hans) | CJK characters | Full (146 terms) | Native names |
+| Traditional Chinese (zh-Hant) | TW / HK / MO place names | Full (zh-Hans + override) | Latin aliases |
+| Japanese (ja) | Hiragana/Katakana | Full (146 terms) | Hepburn + suffix variants |
+| Korean (ko) | Hangul | Full (146 terms) | Revised Romanization |
 
 Auto-detection rules:
+
 - Hangul Syllables (U+AC00–U+D7AF) → `ko`
 - Hiragana (U+3040–U+309F) or Katakana (U+30A0–U+30FF) → `ja`
-- CJK characters → `zh-Hans`
+- CJK characters → `zh-Hans`, unless the text names a Taiwan / Hong Kong / Macau place → `zh-Hant`
 - Otherwise → `en-US`
 
 ## Compliance Notes
@@ -75,17 +85,45 @@ Auto-detection rules:
 - `source` and `source_display` are useful for traceability and UI, but they do not replace `open_meteo_compliance_notice`.
 - `rate_limit_notice` is returned only when Open-Meteo fails and fallback is activated.
 
+## Place Name Resolution
+
+Both providers index place names in Latin script, and neither handles native-script
+Japanese or Korean names on its own — so the plugin transliterates the query before
+geocoding it:
+
+| Input | Transliterated to | How |
+| --- | --- | --- |
+| Hangul (`서울`, `부산`) | `seoul`, `busan` | Revised Romanization, plus the administrative suffix (`수원시` → `suwon`) is dropped |
+| Kana (`とうきょう`, `さっぽろ`) | `tokyo`, `sapporo` | Hepburn |
+| Japanese kanji (`横浜`) | `横浜市`, `横浜都` | Administrative-suffix variants, because the bare name can match an unrelated hamlet in another prefecture |
+| Chinese (`北京`, `上海`) | — | Already indexed natively |
+| Taiwan / Hong Kong / Macau (`台北`, `香港`) | `Taipei`, `Hong Kong` | The upstream index stores these under their English names |
+
+Both romanizers are deterministic — Unicode syllable decomposition for Hangul, a fixed
+table for kana — so no phonetic dictionary ships with the plugin and there is nothing
+to maintain. The one lookup table is the administrative divisions of Taiwan, Hong Kong
+and Macau, which changes very rarely.
+
+wttr.in cannot resolve native-script Japanese or Korean names at all: it answers `서울`
+with a village called Ryongsan and `とうきょう` with a district called Takehiracho.
+Those inputs are therefore always resolved through Open-Meteo, whatever
+`source_preference` says, and the reported `location` always names the place the
+provider actually matched.
+
 ## Open-Meteo and wttr.in Notes
 
 Open-Meteo:
 
-- Supports Chinese, Japanese, and Korean geocoding input.
+- Resolves Chinese place names natively, and Japanese and Korean names once transliterated.
+- Its localized index is not complete, so the plugin also tries the native-script name.
+- When geocoding finds no match the plugin falls back to wttr.in and sets `rate_limit_notice`.
 - Weather condition text is translated in plugin logic.
 - Forecast response is numeric and weather-code based.
 
 wttr.in:
 
-- Supports Unicode locations.
+- Resolves Latin-script and Chinese place names, but maps Japanese and Korean names to a
+  nearby feature instead of the city, so it is only used as a fallback there.
 - Can provide localized weather descriptions.
 
 References:

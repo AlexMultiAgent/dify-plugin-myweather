@@ -32,16 +32,44 @@ Check each item before submitting to the Dify Marketplace.
 
 ## Packaging
 
-- [ ] `dify plugin package ./dify-weather-plugin` succeeds without errors
-- [ ] Generated `.difypkg` includes all required files
+`dify plugin package` archives every file in the target directory — it ignores `.gitignore` and
+does not honour `.difypkgignore` — so stage a runtime-only copy before packaging.
+
+```bash
+STAGE=../myweather-stage
+rm -rf "$STAGE" && mkdir -p "$STAGE"
+cp manifest.yaml main.py requirements.txt pyproject.toml icon.svg README.md LICENSE PRIVACY.md "$STAGE/"
+cp -r _assets provider tools "$STAGE/"
+find "$STAGE" -name '__pycache__' -type d -prune -exec rm -rf {} +
+cd .. && dify plugin package myweather-stage
+```
+
+- [ ] Packaging command succeeds without errors
+- [ ] Generated `.difypkg` includes `manifest.yaml`, `main.py`, `requirements.txt`, `provider/`, `tools/`, and `_assets/icon.svg`
+- [ ] Generated `.difypkg` excludes `.git/`, `tests/`, `.env*`, `__pycache__/`, and local agent/tool directories
 - [ ] Plugin installs and runs in a Dify instance
 
 ## Functional
 
-- [ ] `wttr` primary source works for English and CJK locations
 - [ ] `open-meteo` primary source works for English and CJK locations
+- [ ] `wttr` primary source works for English and Chinese locations
 - [ ] Fallback triggers correctly when the primary source fails
+- [ ] Fallback triggers when Open-Meteo geocoding returns no match and `rate_limit_notice` is set
 - [ ] Language auto-detection works for Korean (Hangul), Japanese (kana), Chinese (CJK)
+- [ ] Taiwan / Hong Kong / Macau place names resolve to Traditional Chinese
 - [ ] Explicit language selection overrides auto-detection
 - [ ] `uscs` unit selection shows Fahrenheit and mph
-- [ ] `include_raw_json` toggles the raw upstream payload
+- [ ] `include_raw_json` adds a `raw` key and no keys absent from `output_schema`
+
+## Place Name Resolution
+
+The reported `location` has to name the place the provider actually matched, not the
+raw query — a wrong match must never hide behind the user's own wording.
+
+- [ ] `서울` resolves to Seoul, not to a same-sounding village
+- [ ] `부산` resolves to Busan
+- [ ] `とうきょう` resolves to Tokyo, not to an unrelated district
+- [ ] `横浜` resolves to 横浜市 (神奈川県), not to a hamlet in another prefecture
+- [ ] `台北` resolves to Taipei
+- [ ] `深圳` resolves to Shenzhen, not to Hong Kong
+- [ ] `北京` resolves to 北京 (北京市)
