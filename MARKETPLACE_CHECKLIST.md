@@ -4,6 +4,9 @@ Check each item before submitting to the Dify Marketplace.
 
 ## Manifest
 
+- [ ] Before choosing a version, check the latest official package under
+  `langgenius/dify-plugins/AlexMultiAgent/myweather` and increment from that
+  published version. Local, unpublished `.difypkg` versions are not release baselines.
 - [ ] `manifest.yaml` version matches the packaged `.difypkg` version AND the `USER_AGENT` string in `tools/weather_logic.py`
 - [ ] `author` field is consistent across `manifest.yaml`, `provider/myweather.yaml`, and `tools/weather_lookup.yaml`
 - [ ] `created_at` reflects the initial publish date (`2026-04-08T00:00:00Z`)

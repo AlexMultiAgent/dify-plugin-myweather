@@ -17,7 +17,7 @@
 - Preserve Open-Meteo attribution behavior for every successful Open-Meteo result.
 - Preserve native-script Korean and kana placement on Open-Meteo only.
 - Keep the public parameter names and emitted output field names unchanged.
-- Bump the patch version from `0.2.0` to `0.2.1` in `manifest.yaml`, `pyproject.toml`, and `USER_AGENT`.
+- Bump the patch version from the official `0.1.2` release to `0.1.3` in `manifest.yaml`, `pyproject.toml`, and `USER_AGENT`.
 - Do not include tests, local agent files, caches, or environment files in the generated `.difypkg`.
 
 ---
@@ -333,7 +333,7 @@ Expected: all weather logic tests pass.
 
 **Interfaces:**
 - Consumes: completed behavior from Tasks 1-5.
-- Produces: Ruff-clean production code, Pyright-clean source and tests, and a consistent `0.2.1` patch version.
+- Produces: Ruff-clean production code, Pyright-clean source and tests, and a consistent `0.1.3` patch version.
 
 - [x] **Step 1: Run Ruff and Pyright before cleanup**
 
@@ -349,7 +349,7 @@ Sort imports, combine nested context managers, use `str.removesuffix`, remove th
 
 - [x] **Step 3: Bump the patch version consistently**
 
-Set `manifest.yaml` `version` and `meta.version`, `pyproject.toml` `project.version`, and `USER_AGENT` to `0.2.1`.
+Set `manifest.yaml` `version` and `meta.version`, `pyproject.toml` `project.version`, and `USER_AGENT` to `0.1.3`.
 
 - [x] **Step 4: Run all static checks**
 
@@ -366,11 +366,11 @@ Expected: Ruff and Pyright exit successfully.
 ### Task 7: Full regression, package, and integrity verification
 
 **Files:**
-- Create: `myweather-0.2.1.difypkg`
+- Create: `myweather-0.1.3.difypkg`
 
 **Interfaces:**
-- Consumes: the final `0.2.1` source tree.
-- Produces: a runtime-only archive with the same manifest, provider, tool, assets, license, privacy, requirements, and README as the tested source.
+- Consumes: the final `0.1.3` source tree.
+- Produces: a runtime-only `0.1.3` archive with the same manifest, provider, tool, assets, license, privacy, requirements, and README as the tested source.
 
 - [x] **Step 1: Run the full suite**
 
@@ -386,7 +386,7 @@ Validate `manifest.yaml` with `PluginConfiguration`.
 
 - [x] **Step 3: Build a runtime-only package**
 
-Stage only `manifest.yaml`, `main.py`, `requirements.txt`, `pyproject.toml`, `icon.svg`, `README.md`, `LICENSE`, `PRIVACY.md`, `_assets/`, `provider/`, and `tools/`; remove caches; archive as `myweather-0.2.1.difypkg`.
+Stage only `manifest.yaml`, `main.py`, `requirements.txt`, `pyproject.toml`, `icon.svg`, `README.md`, `LICENSE`, `PRIVACY.md`, `_assets/`, `provider/`, and `tools/`; remove caches; archive as `myweather-0.1.3.difypkg`.
 
 - [x] **Step 4: Verify package content**
 
