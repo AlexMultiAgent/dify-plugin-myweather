@@ -19,6 +19,7 @@ __pycache__/
 
 # Claude Code
 .claude/
+.claude.local.md
 .playwright-mcp/
 
 # OS
