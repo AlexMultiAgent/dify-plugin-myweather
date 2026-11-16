@@ -52,6 +52,21 @@ cd .. && dify plugin package myweather-stage
 - [ ] Generated `.difypkg` excludes `.git/`, `tests/`, `.env*`, `__pycache__/`, and local agent/tool directories
 - [ ] Plugin installs and runs in a Dify instance
 
+## Static Analysis & Dependencies
+
+```bash
+uv sync --group dev
+ruff check .
+ruff format --check .
+pyright --project pyproject.toml
+pip-audit -r requirements.txt
+```
+
+- [ ] `ruff check .` passes with the rule set pinned in `pyproject.toml`
+- [ ] `ruff format --check .` reports every file already formatted
+- [ ] `pyright --project pyproject.toml` reports zero errors
+- [ ] `pip-audit -r requirements.txt` reports no known vulnerabilities
+
 ## Functional
 
 - [ ] `open-meteo` primary source works for English and CJK locations
@@ -63,6 +78,10 @@ cd .. && dify plugin package myweather-stage
 - [ ] Explicit language selection overrides auto-detection
 - [ ] `uscs` unit selection shows Fahrenheit and mph
 - [ ] `include_raw_json` adds a `raw` key and no keys absent from `output_schema`
+- [ ] A malformed upstream payload falls back to the other provider instead of raising
+- [ ] The lookup gives up on the second provider once the lookup deadline is reached
+- [ ] At most four location candidates are queried per provider
+- [ ] A failing lookup still emits every declared output variable, with `null` for the numeric ones
 
 ## Place Name Resolution
 

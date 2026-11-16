@@ -13,7 +13,21 @@ dependencies = [
 [dependency-groups]
 dev = [
   "pytest>=8.0.0",
+  "ruff>=0.17.0",
+  "pyright>=1.1.400",
+  "pip-audit>=2.10.0",
 ]
+
+[tool.ruff]
+# line-length stays at ruff's default (88) -- the tree is already formatted that
+# way, and raising it would reformat every file.
+target-version = "py312"
+exclude = [".venv", "__pycache__", ".pytest_cache", ".git"]
+
+[tool.ruff.lint]
+# Pin the default rule set and add isort/pyupgrade/bugbear so a ruff upgrade
+# cannot silently change what the gate reports.
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
 
 [tool.pyright]
 typeCheckingMode = "basic"
