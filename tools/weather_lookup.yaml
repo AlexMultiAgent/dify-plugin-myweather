@@ -46,11 +46,11 @@ parameters:
     ja_JP: 言語
     ko_KR: 언어
   human_description:
-    en_US: Output language. 'Auto' detects from input text (Hangul → Korean, hiragana/katakana → Japanese, CJK → Simplified Chinese, otherwise English).
-    zh_Hans: 输出语言。"自动"会根据输入文本检测（谚文 → 韩语，平假名/片假名 → 日语，汉字 → 简体中文，否则 → 英文）。
-    zh_Hant: 輸出語言。"自動"會根據輸入文本檢測（諺文 → 韓語，平假名/片假名 → 日語，漢字 → 簡體中文，否則 → 英文）。
-    ja_JP: 出力言語。"自動"は入力テキストから検出します（ハングル → 韓国語、ひらがな/カタカナ → 日本語、漢字 → 簡体字中国語、それ以外 → 英語）。
-    ko_KR: 출력 언어. "자동"은 입력 텍스트에서 감지합니다 (한글 → 한국어, 히라가나/가타카나 → 일본어, 한자 → 중국어 간체, 그 외 → 영어).
+    en_US: Output language. 'Auto' detects Hangul as Korean, kana as Japanese, recognized regional Han names accordingly, other Han text as Simplified Chinese, and other text as English. Set the language explicitly for ambiguous Han-only names.
+    zh_Hans: 输出语言。“自动”会将谚文识别为韩语、假名识别为日语，并按已收录地名识别港澳台及日本汉字地名，其余汉字默认简体中文，其他文本默认英文。仅含汉字且存在歧义的地名请显式选择语言。
+    zh_Hant: 輸出語言。「自動」會將諺文識別為韓語、假名識別為日語，並按已收錄地名識別港澳台及日本漢字地名，其餘漢字預設簡體中文，其他文字預設英文。僅含漢字且存在歧義的地名請明確選擇語言。
+    ja_JP: 出力言語。"自動"はハングルを韓国語、かなを日本語、登録済みの地域別漢字地名を対応言語として認識し、その他の漢字は簡体字中国語、それ以外は英語と判定します。漢字のみで曖昧な地名は明示的に選択してください。
+    ko_KR: 출력 언어. "자동"은 한글을 한국어, 가나를 일본어, 등록된 지역별 한자 지명을 해당 언어로 인식하며, 그 밖의 한자는 중국어 간체, 기타 텍스트는 영어로 처리합니다. 모호한 한자 지명은 언어를 직접 선택하세요.
   options:
   - label:
       en_US: Auto (detect)
@@ -138,11 +138,11 @@ parameters:
     ja_JP: データソース優先
     ko_KR: 데이터 소스 우선
   human_description:
-    en_US: Choose primary source. The unselected provider is always used as fallback. Japanese and Korean place names are always resolved through Open-Meteo, because wttr.in answers them with a same-sounding neighbourhood instead of the city.
-    zh_Hans: 选择主数据源，未选中的数据源会自动兜底。日文与韩文地名始终通过 Open-Meteo 解析，因为 wttr.in 会返回同音的邻近地区而非目标城市。
-    zh_Hant: 選擇主資料來源，未選擇的資料來源會自動兜底。日文與韓文地名一律透過 Open-Meteo 解析，因為 wttr.in 會回傳同音的鄰近地區而非目標城市。
-    ja_JP: 優先データソースを選択します。選択されていないプロバイダーは常にフォールバックとして使用されます。日本語の地名は必ず Open-Meteo で解決されます（wttr.in は同名の近隣の地を返します）。
-    ko_KR: 주 데이터 소스를 선택합니다. 선택되지 않은 공급자는 항상 대체 수단으로 사용됩니다. 한국어 지명은 항상 Open-Meteo로 조회됩니다(wttr.in은 같은 이름의 인근 지역을 반환합니다).
+    en_US: Choose the primary source. The other provider is normally used as fallback. Native-script Japanese and Korean names always use Open-Meteo directly because wttr.in returns a same-sounding neighbourhood instead of the city.
+    zh_Hans: 选择主数据源，通常由另一数据源兜底。日文与韩文地名始终直接通过 Open-Meteo 解析，因为 wttr.in 会返回同音的邻近地区而非目标城市。
+    zh_Hant: 選擇主資料來源，通常由另一資料來源兜底。日文與韓文地名一律直接透過 Open-Meteo 解析，因為 wttr.in 會回傳同音的鄰近地區而非目標城市。
+    ja_JP: 優先データソースを選択します。通常は別のプロバイダーをフォールバックに使用します。日本語と韓国語の地名は、wttr.in が同名の近隣地を返すため、常に Open-Meteo を直接使用します。
+    ko_KR: 주 데이터 소스를 선택합니다. 일반적으로 다른 공급자를 대체 수단으로 사용합니다. 일본어와 한국어 지명은 wttr.in이 같은 이름의 인근 지역을 반환하므로 항상 Open-Meteo를 직접 사용합니다.
   options:
   - label:
       en_US: wttr.in first (Open-Meteo fallback)
@@ -194,19 +194,19 @@ output_schema:
       type: string
       description: Text weather condition.
     temperature:
-      type: number
+      type: [number, "null"]
       description: Current temperature in selected unit system.
     temperature_unit:
       type: string
       description: Temperature unit symbol (°C or °F).
     feels_like:
-      type: number
+      type: [number, "null"]
       description: Feels-like temperature in selected unit system.
     humidity:
-      type: integer
+      type: [integer, "null"]
       description: Relative humidity percentage.
     wind_speed:
-      type: number
+      type: [number, "null"]
       description: Wind speed in selected unit system.
     wind_speed_unit:
       type: string

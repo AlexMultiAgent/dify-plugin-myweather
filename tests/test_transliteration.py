@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from tools.transliteration import (
+    country_place_names,
     has_hangul,
     has_kana,
     has_kanji,
@@ -161,9 +162,12 @@ def test_japanese_place_variants_ignores_non_kanji():
         ("台中", "TW", "Taichung"),
         ("新北", "TW", "New Taipei"),
         ("桃園", "TW", "Taoyuan"),
+        ("嘉义", "TW", "Chiayi"),
         ("香港", "HK", "Hong Kong"),
+        ("九龍", "HK", "Kowloon"),
         ("澳門", "MO", "Macau"),
         ("澳门", "MO", "Macau"),
+        ("氹仔", "MO", "Taipa"),
         ("台北市", "TW", "Taipei"),
     ],
 )
@@ -175,6 +179,13 @@ def test_latin_place_alias_unknown():
     assert latin_place_alias("北京", "TW") is None
     assert latin_place_alias("台北", "CN") is None
     assert latin_place_alias("", "TW") is None
+
+
+def test_country_place_names_include_alias_keys():
+    assert "嘉义" in country_place_names("TW")
+    assert "九龍" in country_place_names("HK")
+    assert "氹仔" in country_place_names("MO")
+    assert country_place_names("CN") == ()
 
 
 # ---------------------------------------------------------------------------

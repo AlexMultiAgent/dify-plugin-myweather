@@ -16,6 +16,7 @@ from tools.translations import (
     WEATHER_TRANSLATIONS_ZH_HANT,
 )
 from tools.transliteration import (
+    country_place_names,
     has_hangul,
     has_kana,
     has_kanji,
@@ -33,8 +34,10 @@ WTTR_BASE_URL = "https://wttr.in"
 OPEN_METEO_GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 DEFAULT_TIMEOUT = 12
+TOTAL_LOOKUP_TIMEOUT = 90
+MAX_LOCATION_CANDIDATES = 4
 # When updating the plugin version, also update manifest.yaml and pyproject.toml.
-USER_AGENT = "dify-myweather-plugin/0.2.0"
+USER_AGENT = "dify-myweather-plugin/0.2.1"
 OPEN_METEO_SITE_URL = "https://open-meteo.com"
 OPEN_METEO_LICENCE_URL = "https://open-meteo.com/en/licence"
 OPEN_METEO_TERMS_URL = "https://open-meteo.com/en/terms"
@@ -42,6 +45,80 @@ OPEN_METEO_PRICING_URL = "https://open-meteo.com/en/pricing"
 WTTR_HELP_URL = "https://wttr.in/:help"
 
 LANGUAGE_VALUES = frozenset({"auto", "en-US", "zh-Hans", "zh-Hant", "ja", "ko"})
+
+_JAPANESE_HAN_PLACE_NAMES = frozenset(
+    {
+        "北海道",
+        "青森",
+        "岩手",
+        "宮城",
+        "秋田",
+        "山形",
+        "福島",
+        "茨城",
+        "栃木",
+        "群馬",
+        "埼玉",
+        "千葉",
+        "東京",
+        "神奈川",
+        "新潟",
+        "富山",
+        "石川",
+        "福井",
+        "山梨",
+        "長野",
+        "岐阜",
+        "静岡",
+        "愛知",
+        "三重",
+        "滋賀",
+        "京都",
+        "大阪",
+        "兵庫",
+        "奈良",
+        "和歌山",
+        "鳥取",
+        "島根",
+        "岡山",
+        "広島",
+        "山口",
+        "徳島",
+        "香川",
+        "愛媛",
+        "高知",
+        "福岡",
+        "佐賀",
+        "長崎",
+        "熊本",
+        "大分",
+        "宮崎",
+        "鹿児島",
+        "沖縄",
+        "名古屋",
+        "札幌",
+        "横浜",
+        "川崎",
+        "相模原",
+        "浜松",
+        "堺",
+        "北九州",
+        "神戸",
+        "仙台",
+        "新宿",
+        "渋谷",
+        "宇都宮",
+        "那覇",
+        "甲府",
+        "倉敷",
+        "盛岡",
+        "別府",
+        "釧路",
+        "旭川",
+        "函館",
+        "小樽",
+    }
+)
 
 _TRANSLATION_MAP = {
     "en-US": None,
@@ -245,18 +322,28 @@ _RETRY_MAX = 2
 _RETRY_BACKOFF = 1.0
 
 
-def _retry_request(method: str, url: str, session: requests.Session, **kwargs: Any) -> requests.Response:
+def _retry_request(
+    method: str,
+    url: str,
+    session: requests.Session,
+    *,
+    deadline: float | None = None,
+    **kwargs: Any,
+) -> requests.Response:
     """Issue an HTTP request with retries for transient network errors."""
     last_exc: Exception | None = None
     for attempt in range(_RETRY_MAX + 1):
         try:
-            response = session.request(method, url, **kwargs)
+            request_kwargs = dict(kwargs)
+            if deadline is not None:
+                request_kwargs["timeout"] = _request_timeout(deadline)
+            response = session.request(method, url, **request_kwargs)
             response.raise_for_status()
             return response
         except (requests.ConnectionError, requests.Timeout) as exc:
             last_exc = exc
             if attempt < _RETRY_MAX:
-                delay = _RETRY_BACKOFF * (2 ** attempt)
+                delay = _RETRY_BACKOFF * (2**attempt)
                 logger.debug(
                     "Retry %d/%d for %s %s after %.1fs: %s",
                     attempt + 1,
@@ -266,12 +353,12 @@ def _retry_request(method: str, url: str, session: requests.Session, **kwargs: A
                     delay,
                     exc,
                 )
-                time.sleep(delay)
+                _wait_before_retry(delay, deadline)
         except requests.HTTPError as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)
             if status in (429, 503) and attempt < _RETRY_MAX:
                 last_exc = exc
-                delay = _RETRY_BACKOFF * (2 ** attempt)
+                delay = _RETRY_BACKOFF * (2**attempt)
                 logger.debug(
                     "Retry %d/%d for %s %s after %.1fs: HTTP %s",
                     attempt + 1,
@@ -281,7 +368,7 @@ def _retry_request(method: str, url: str, session: requests.Session, **kwargs: A
                     delay,
                     status,
                 )
-                time.sleep(delay)
+                _wait_before_retry(delay, deadline)
             else:
                 raise
     assert last_exc is not None
@@ -290,6 +377,30 @@ def _retry_request(method: str, url: str, session: requests.Session, **kwargs: A
 
 class WeatherLookupError(RuntimeError):
     """Raised when weather lookup cannot be completed from any source."""
+
+
+class WeatherLookupTimeout(WeatherLookupError):
+    """Raised when the bounded weather lookup budget is exhausted."""
+
+
+def _remaining_lookup_time(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise WeatherLookupTimeout("Weather lookup deadline exceeded.")
+    return remaining
+
+
+def _request_timeout(deadline: float) -> float:
+    return min(DEFAULT_TIMEOUT, _remaining_lookup_time(deadline))
+
+
+def _wait_before_retry(delay: float, deadline: float | None) -> None:
+    if deadline is None:
+        time.sleep(delay)
+        return
+    if deadline - time.monotonic() <= delay:
+        raise WeatherLookupTimeout("Weather lookup deadline exceeded.")
+    time.sleep(delay)
 
 
 def _to_float(value: Any) -> float | None:
@@ -305,7 +416,7 @@ def _to_int(value: Any) -> int | None:
     try:
         if value is None:
             return None
-        return int(round(float(value)))
+        return round(float(value))
     except (TypeError, ValueError):
         return None
 
@@ -429,7 +540,9 @@ def _extract_cjk_location_fragments(text: str, language: str = "zh-Hans") -> lis
 
     cleaned = re.sub(r"[？?！!。；;：:（）()\[\]{}]", " ", cleaned)
     split_markers = _SPLIT_MARKERS_MAP.get(language, [])
-    split_pattern = "|".join(sorted([re.escape(item) for item in split_markers], key=len, reverse=True))
+    split_pattern = "|".join(
+        sorted([re.escape(item) for item in split_markers], key=len, reverse=True)
+    )
     parts = re.split(split_pattern, cleaned) if split_pattern else [cleaned]
 
     fragments: list[str] = []
@@ -449,50 +562,150 @@ def _normalize_location_key(text: str) -> str:
     return re.sub(r"[\s,，。.;；:_\-/\\'`]+", "", normalized)
 
 
+def _has_latin_place_name(text: str, names: set[str] | frozenset[str]) -> bool:
+    components = {part.strip().lower() for part in text.split(",") if part.strip()}
+    components.add(text.strip().lower())
+    return bool(components & names)
+
+
+def _has_native_place_name(text: str, country_code: str) -> bool:
+    return any(place in text for place in country_place_names(country_code))
+
+
 def _infer_country_hints(location: str) -> list[str]:
     raw = location or ""
     lowered = raw.lower()
 
-    if "香港" in raw or "hong kong" in lowered:
+    if _has_native_place_name(raw, "HK") or _has_latin_place_name(
+        lowered, {"hong kong"}
+    ):
         return ["HK"]
-    if any(token in raw for token in ["澳门", "澳門"]) or "macau" in lowered or "macao" in lowered:
+    if _has_native_place_name(raw, "MO") or _has_latin_place_name(
+        lowered, {"macau", "macao"}
+    ):
         return ["MO"]
-    if any(token in raw for token in [
-        "台湾", "台灣", "臺灣", "台北", "臺北", "台中", "臺中", "台南", "臺南",
-        "高雄", "桃园", "桃園", "新竹", "基隆", "新北", "台东", "臺東", "花莲", "花蓮",
-        "屏东", "屏東", "澎湖",
-    ]) or any(tok in lowered for tok in [
-        "taiwan", "taipei", "kaohsiung", "taichung", "tainan", "hsinchu", "keelung",
-    ]):
+    if _has_native_place_name(raw, "TW") or _has_latin_place_name(
+        lowered,
+        {
+            "taiwan",
+            "taipei",
+            "new taipei",
+            "kaohsiung",
+            "taichung",
+            "tainan",
+            "hsinchu",
+            "keelung",
+            "taoyuan",
+            "chiayi",
+            "yilan",
+            "hualien",
+            "taitung",
+            "pingtung",
+            "penghu",
+            "miaoli",
+            "changhua",
+            "nantou",
+            "yunlin",
+            "kinmen",
+            "lienchiang",
+        },
+    ):
         return ["TW"]
-    if "中国" in raw or "中國" in raw or "大陆" in raw or "大陸" in raw or "china" in lowered:
+    if any(
+        token in raw for token in ["中国", "中國", "大陆", "大陸"]
+    ) or _has_latin_place_name(lowered, {"china"}):
         return ["CN"]
-    if has_kana(raw) or any(token in raw for token in [
-        "日本", "東京", "大阪", "京都", "北海道", "沖縄", "名古屋", "福岡",
-        "札幌", "広島", "横浜", "神戸", "仙台", "新宿", "渋谷", "千葉",
-        "埼玉", "神奈川", "長崎", "奈良", "鹿児島", "宇都宮", "静岡", "長野",
-        "那覇", "宮崎", "熊本", "甲府", "倉敷", "盛岡", "富山", "福井", "高知",
-    ]) or any(tok in lowered for tok in [
-        "tokyo", "osaka", "kyoto", "hokkaido", "okinawa", "nagoya", "fukuoka",
-        "sapporo", "hiroshima", "yokohama", "kobe", "sendai",
-    ]):
+    if (
+        has_kana(raw)
+        or "日本" in raw
+        or any(place in raw for place in _JAPANESE_HAN_PLACE_NAMES)
+        or _has_latin_place_name(
+            lowered,
+            {
+                "japan",
+                "tokyo",
+                "osaka",
+                "kyoto",
+                "hokkaido",
+                "okinawa",
+                "nagoya",
+                "fukuoka",
+                "sapporo",
+                "hiroshima",
+                "yokohama",
+                "kobe",
+                "sendai",
+            },
+        )
+    ):
         return ["JP"]
-    if any(token in raw for token in [
-        "한국", "서울", "부산", "인천", "대구", "대전", "광주", "울산",
-        "제주", "수원", "성남", "고양", "용인", "청주", "전주", "포항",
-        "경주", "강릉", "속초", "여수", "목포", "춘천", "원주", "천안",
-        "안산", "김해", "구미", "남양", "평택", "진주", "나주", "군산",
-        "남원", "김천", "제천", "목산", "사천", "의정부",
-    ]) or any(tok in lowered for tok in [
-        "korea", "seoul", "busan", "incheon", "daegu", "daejeon",
-        "gwangju", "ulsan", "jeju", "suwon", "seongnam",
-    ]):
+    if any(
+        token in raw
+        for token in [
+            "한국",
+            "서울",
+            "부산",
+            "인천",
+            "대구",
+            "대전",
+            "광주",
+            "울산",
+            "제주",
+            "수원",
+            "성남",
+            "고양",
+            "용인",
+            "청주",
+            "전주",
+            "포항",
+            "경주",
+            "강릉",
+            "속초",
+            "여수",
+            "목포",
+            "춘천",
+            "원주",
+            "천안",
+            "안산",
+            "김해",
+            "구미",
+            "남양",
+            "평택",
+            "진주",
+            "나주",
+            "군산",
+            "남원",
+            "김천",
+            "제천",
+            "목산",
+            "사천",
+            "의정부",
+        ]
+    ) or _has_latin_place_name(
+        lowered,
+        {
+            "korea",
+            "south korea",
+            "seoul",
+            "busan",
+            "incheon",
+            "daegu",
+            "daejeon",
+            "gwangju",
+            "ulsan",
+            "jeju",
+            "suwon",
+            "seongnam",
+        },
+    ):
         return ["KR"]
 
     return []
 
 
-def _build_open_meteo_geocode_params(location: str, language: str = "en-US") -> list[dict[str, Any]]:
+def _build_open_meteo_geocode_params(
+    location: str, language: str = "en-US"
+) -> list[dict[str, Any]]:
     if language == "ja":
         api_languages = ["ja", "en"]
     elif language in ("zh", "zh-Hans", "zh-Hant"):
@@ -649,7 +862,9 @@ def _strip_noise_tokens(text: str, language: str) -> str:
     return re.sub(r"\s+", " ", cleaned).strip()
 
 
-def _transliteration_variants(candidate: str, country_hints: list[str], language: str) -> list[str]:
+def _transliteration_variants(
+    candidate: str, country_hints: list[str], language: str
+) -> list[str]:
     """Latin-script variants of a native-script place name.
 
     Open-Meteo indexes most Japanese and Korean places under their Latin names,
@@ -691,7 +906,9 @@ def _api_language_for(candidate: str, country_hints: list[str]) -> str:
     return "en"
 
 
-def _open_meteo_queries(location: str, language: str = "en-US") -> list[tuple[str, str]]:
+def _open_meteo_queries(
+    location: str, language: str = "en-US"
+) -> list[tuple[str, str]]:
     """Queries for Open-Meteo as (query, api_language), most specific first.
 
     Transliterated variants are tried before the native-script names because the
@@ -736,15 +953,21 @@ def _normalize_cjk_location_display(text: str, language: str = "zh-Hans") -> str
     return cleaned or text
 
 
-def _fetch_from_wttr(location: str, session: requests.Session) -> dict[str, Any]:
+def _fetch_from_wttr(
+    location: str,
+    session: requests.Session,
+    *,
+    deadline: float | None = None,
+) -> dict[str, Any]:
     encoded_location = quote_plus(location.strip())
-    logger.info("Fetching weather from wttr.in for location=%s", location)
+    logger.info("Fetching weather from wttr.in")
     response = _retry_request(
         "GET",
         f"{WTTR_BASE_URL}/{encoded_location}",
         session,
         params={"format": "j1"},
         timeout=DEFAULT_TIMEOUT,
+        deadline=deadline,
         headers={"User-Agent": USER_AGENT},
     )
 
@@ -757,7 +980,9 @@ def _fetch_from_wttr(location: str, session: requests.Session) -> dict[str, Any]
     country_name = ((nearest.get("country") or [{}])[0]).get("value")
     resolved_location = _clean_join([area_name, region_name, country_name]) or location
 
-    condition = (((current.get("weatherDesc") or [{}])[0]).get("value") or "Unknown").strip()
+    condition = (
+        ((current.get("weatherDesc") or [{}])[0]).get("value") or "Unknown"
+    ).strip()
 
     temp_c = _to_float(current.get("temp_C"))
     temp_f = _to_float(current.get("temp_F"))
@@ -795,6 +1020,8 @@ def _fetch_from_open_meteo(
     session: requests.Session,
     language: str = "en-US",
     api_language: str | None = None,
+    *,
+    deadline: float | None = None,
 ) -> dict[str, Any]:
     """Fetch weather from Open-Meteo.
 
@@ -822,6 +1049,7 @@ def _fetch_from_open_meteo(
             session,
             params=geocode_params,
             timeout=DEFAULT_TIMEOUT,
+            deadline=deadline,
             headers={"User-Agent": USER_AGENT},
         )
         payload = geocode_resp.json()
@@ -840,7 +1068,9 @@ def _fetch_from_open_meteo(
             continue
 
         hint = str(geocode_params.get("countryCode") or "").upper() or None
-        candidate = _select_open_meteo_candidate(candidates, location, country_hint=hint, language=request_language)
+        candidate = _select_open_meteo_candidate(
+            candidates, location, country_hint=hint, language=request_language
+        )
         candidate_lat = _to_float(candidate.get("latitude"))
         candidate_lon = _to_float(candidate.get("longitude"))
         if candidate_lat is None or candidate_lon is None:
@@ -853,20 +1083,26 @@ def _fetch_from_open_meteo(
         match = candidate
         latitude = candidate_lat
         longitude = candidate_lon
-        logger.info(
-            "Open-Meteo geocoding matched: %s (%s, %s) country=%s",
-            match.get("name"),
-            latitude,
-            longitude,
-            match.get("country_code", "?"),
+        logger.debug(
+            "Open-Meteo geocoding matched country=%s", match.get("country_code", "?")
         )
         break
 
-    if match is None or geocode_payload is None or latitude is None or longitude is None:
+    if (
+        match is None
+        or geocode_payload is None
+        or latitude is None
+        or longitude is None
+    ):
         detail = "; ".join(geocode_errors) if geocode_errors else "no-candidate"
-        raise WeatherLookupError(f"Open-Meteo geocoding returned no match for '{location}'. {detail}")
+        raise WeatherLookupError(
+            f"Open-Meteo geocoding returned no match for '{location}'. {detail}"
+        )
 
-    resolved_location = _clean_join([match.get("name"), match.get("admin1"), match.get("country")]) or location
+    resolved_location = (
+        _clean_join([match.get("name"), match.get("admin1"), match.get("country")])
+        or location
+    )
 
     weather_resp = _retry_request(
         "GET",
@@ -876,17 +1112,13 @@ def _fetch_from_open_meteo(
             "latitude": latitude,
             "longitude": longitude,
             "timezone": "auto",
-            "current": ",".join(
-                [
-                    "temperature_2m",
-                    "apparent_temperature",
-                    "relative_humidity_2m",
-                    "wind_speed_10m",
-                    "weather_code",
-                ]
+            "current": (
+                "temperature_2m,apparent_temperature,"
+                "relative_humidity_2m,wind_speed_10m,weather_code"
             ),
         },
         timeout=DEFAULT_TIMEOUT,
+        deadline=deadline,
         headers={"User-Agent": USER_AGENT},
     )
     weather_payload = weather_resp.json()
@@ -897,7 +1129,11 @@ def _fetch_from_open_meteo(
     wind_kmh = _to_float(current.get("wind_speed_10m"))
     weather_code = _to_int(current.get("weather_code"))
 
-    condition = WEATHER_CODE_DESCRIPTIONS.get(weather_code, "Unknown") if weather_code is not None else "Unknown"
+    condition = (
+        WEATHER_CODE_DESCRIPTIONS.get(weather_code, "Unknown")
+        if weather_code is not None
+        else "Unknown"
+    )
 
     return {
         "source": "open-meteo",
@@ -969,7 +1205,9 @@ def _is_open_meteo_rate_limited(exc: Exception) -> bool:
     return False
 
 
-def _build_open_meteo_fallback_notice(language: str = "en-US", rate_limited: bool = False) -> str:
+def _build_open_meteo_fallback_notice(
+    language: str = "en-US", rate_limited: bool = False
+) -> str:
     if language == "zh-Hans":
         if rate_limited:
             return "提示：Open-Meteo 返回 429（限流），已自动回退到 wttr.in。"
@@ -984,7 +1222,9 @@ def _build_open_meteo_fallback_notice(language: str = "en-US", rate_limited: boo
         return "注意：Open-Meteo リクエストが失敗したため、wttr.in にフォールバックしました。"
     if language == "ko":
         if rate_limited:
-            return "알림: Open-Meteo가 429(속도 제한)을 반환하여 wttr.in으로 전환했습니다."
+            return (
+                "알림: Open-Meteo가 429(속도 제한)을 반환하여 wttr.in으로 전환했습니다."
+            )
         return "알림: Open-Meteo 요청이 실패하여 wttr.in으로 전환했습니다."
 
     if rate_limited:
@@ -1053,7 +1293,9 @@ _CJK_FORMAT: dict[str, dict[str, str]] = {
 }
 
 
-def _build_summary(data: dict[str, Any], language: str = "en-US", query_location: str | None = None) -> str:
+def _build_summary(
+    data: dict[str, Any], language: str = "en-US", query_location: str | None = None
+) -> str:
     humidity = data.get("humidity")
     temp = data.get("temperature")
     feels = data.get("feels_like")
@@ -1085,7 +1327,7 @@ def _build_summary(data: dict[str, Any], language: str = "en-US", query_location
             f"{fmt['wind_label']} {wind_txt} {wind_unit}{fmt['sep_end']}"
         )
         fallback_notice = str(data.get("rate_limit_notice") or "").strip()
-        return "\n".join([weather_line, fallback_notice]) if fallback_notice else weather_line
+        return f"{weather_line}\n{fallback_notice}" if fallback_notice else weather_line
 
     humidity_txt = f"{humidity}%" if humidity is not None else "n/a"
     temp_txt = "n/a" if temp is None else f"{temp}"
@@ -1101,7 +1343,7 @@ def _build_summary(data: dict[str, Any], language: str = "en-US", query_location
         f"wind {wind_txt} {wind_unit_display}."
     )
     fallback_notice = str(data.get("rate_limit_notice") or "").strip()
-    return "\n".join([weather_line, fallback_notice]) if fallback_notice else weather_line
+    return f"{weather_line}\n{fallback_notice}" if fallback_notice else weather_line
 
 
 def get_weather(
@@ -1116,7 +1358,9 @@ def get_weather(
         raise WeatherLookupError("Location is required.")
 
     if units not in {"metric", "uscs"}:
-        raise WeatherLookupError(f"Unsupported units '{units}'. Use 'metric' or 'uscs'.")
+        raise WeatherLookupError(
+            f"Unsupported units '{units}'. Use 'metric' or 'uscs'."
+        )
 
     source_order: dict[str, list[str]] = {
         "wttr": ["wttr", "open-meteo"],
@@ -1130,16 +1374,26 @@ def get_weather(
     output_language = _resolve_language(language, location)
     active_session = session or requests.Session()
     try:
+        deadline = time.monotonic() + TOTAL_LOOKUP_TIMEOUT
         attempts = list(source_order[preferred_source])
         errors: dict[str, str] = {}
-        location_candidates = _candidate_locations(location, output_language)
-        open_meteo_queries = _open_meteo_queries(location, output_language)
+        location_candidates = _candidate_locations(location, output_language)[
+            :MAX_LOCATION_CANDIDATES
+        ]
+        open_meteo_queries = _open_meteo_queries(location, output_language)[
+            :MAX_LOCATION_CANDIDATES
+        ]
         open_meteo_failed = False
         open_meteo_rate_limited = False
 
-        if _script_of(location) in ("hangul", "kana"):
-            # wttr.in cannot resolve native-script Japanese or Korean place names:
-            # it answers with a same-sounding neighbourhood instead of the city.
+        location_script = _script_of(location)
+        is_native_japanese = location_script == "kana" or (
+            location_script == "han"
+            and ("JP" in _infer_country_hints(location) or output_language == "ja")
+        )
+        if location_script == "hangul" or is_native_japanese:
+            # wttr.in answers native-script Japanese and Korean place names with
+            # a same-sounding neighbourhood instead of the city.
             attempts = ["open-meteo"]
 
         for source in attempts:
@@ -1150,20 +1404,38 @@ def get_weather(
             for candidate, api_language in candidates:
                 try:
                     if source == "wttr":
-                        result = _fetch_from_wttr(candidate, active_session)
+                        result = _fetch_from_wttr(
+                            candidate, active_session, deadline=deadline
+                        )
                     else:
                         result = _fetch_from_open_meteo(
-                            candidate, active_session, output_language, api_language
+                            candidate,
+                            active_session,
+                            output_language,
+                            api_language,
+                            deadline=deadline,
                         )
+                except WeatherLookupTimeout as exc:
+                    logger.warning(
+                        "Weather lookup stopped at deadline: source=%s", source
+                    )
+                    raise WeatherLookupError(str(exc)) from exc
                 except (
                     requests.RequestException,
                     WeatherLookupError,
+                    AttributeError,
+                    IndexError,
                     KeyError,
                     TypeError,
                     ValueError,
                 ) as exc:
                     logger.warning(
-                        "Weather fetch failed: source=%s candidate=%s error=%s",
+                        "Weather fetch failed: source=%s error=%s",
+                        source,
+                        type(exc).__name__,
+                    )
+                    logger.debug(
+                        "Weather fetch failure detail: source=%s candidate=%s error=%s",
                         source,
                         candidate,
                         exc,
@@ -1199,20 +1471,28 @@ def get_weather(
                         source=str(result.get("source") or ""),
                         language=output_language,
                     )
-                    result["summary"] = _build_summary(result, language=output_language, query_location=location)
+                    result["summary"] = _build_summary(
+                        result, language=output_language, query_location=location
+                    )
                     result["language"] = output_language
-                except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
-                    raise WeatherLookupError(f"Failed to format weather result: {exc}") from exc
+                except (
+                    AttributeError,
+                    IndexError,
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                ) as exc:
+                    raise WeatherLookupError(
+                        f"Failed to format weather result: {exc}"
+                    ) from exc
 
-                logger.info(
-                    "Weather fetch succeeded: source=%s location=%s resolved=%s",
-                    result.get("source"),
-                    location,
-                    result.get("location"),
-                )
+                logger.info("Weather fetch succeeded: source=%s", result.get("source"))
                 return result
 
-        detail = "; ".join([f"{name}: {msg}" for name, msg in errors.items()]) or "unknown error"
+        detail = (
+            "; ".join([f"{name}: {msg}" for name, msg in errors.items()])
+            or "unknown error"
+        )
         raise WeatherLookupError(f"All weather sources failed. {detail}")
     finally:
         if session is None:

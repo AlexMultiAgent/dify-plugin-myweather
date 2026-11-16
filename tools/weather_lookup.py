@@ -86,7 +86,9 @@ def _empty_result(lang: str, loc: str, error_text: str) -> dict[str, Any]:
 
 
 class WeatherLookupTool(Tool):
-    def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage, None, None]:
+    def _invoke(
+        self, tool_parameters: dict[str, Any]
+    ) -> Generator[ToolInvokeMessage, None, None]:
         location = str(tool_parameters.get("location", "")).strip()
 
         if not location:
@@ -99,7 +101,10 @@ class WeatherLookupTool(Tool):
             return
 
         units = str(tool_parameters.get("units", "metric")).strip() or "metric"
-        source_preference = str(tool_parameters.get("source_preference", "open-meteo")).strip() or "open-meteo"
+        source_preference = (
+            str(tool_parameters.get("source_preference", "open-meteo")).strip()
+            or "open-meteo"
+        )
         language = str(tool_parameters.get("language", "auto")).strip() or "auto"
         include_raw_json = _as_bool(tool_parameters.get("include_raw_json", False))
 
