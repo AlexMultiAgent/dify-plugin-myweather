@@ -169,4 +169,4 @@ wttr.in：
 
 MIT License，详见 [LICENSE](./LICENSE)。
 
-英文版文档见 [README.md](./README.md)。
+英文版文档见 [README.md](../README.md)。

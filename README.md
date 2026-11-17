@@ -174,4 +174,5 @@ References:
 
 MIT License. See [LICENSE](./LICENSE).
 
-For the Simplified Chinese version of this document, see [README.zh-Hans.md](./README.zh-Hans.md).
+For the Simplified Chinese version of this document, see
+[readme/README_zh_Hans.md](./readme/README_zh_Hans.md).

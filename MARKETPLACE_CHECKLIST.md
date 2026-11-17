@@ -41,27 +41,33 @@ Check each item before submitting to the Dify Marketplace.
 ## README
 
 - [ ] `README.md` primary content is English — localized prose and CJK examples
-      belong in `README.<locale>.md` (the Marketplace reads `README.zh-Hans.md`)
+      belong in `readme/README_zh_Hans.md`, which is the path and name the
+      Marketplace reads for a translated README
 - [ ] `README.md` states the connection requirements (the hosts the plugin calls)
 - [ ] `README.md` links the source repository on an allowed host
 - [ ] No personal email address in the README or the manifest
 
 ## Packaging
 
-`dify plugin package` archives every file in the target directory — it ignores `.gitignore` and
-does not honour `.difypkgignore` — so stage a runtime-only copy before packaging.
+`dify plugin package` honours `.difyignore`, which keeps the development files out
+of the package. The CLI refuses `.` as an input path and names the output after the
+input directory, so the output path is given explicitly:
 
 ```bash
-STAGE=../myweather-stage
-rm -rf "$STAGE" && mkdir -p "$STAGE"
-cp manifest.yaml main.py requirements.txt pyproject.toml icon.svg README.md README.zh-Hans.md LICENSE PRIVACY.md "$STAGE/"
-cp -r _assets provider tools "$STAGE/"
-find "$STAGE" -name '__pycache__' -type d -prune -exec rm -rf {} +
-cd .. && dify plugin package myweather-stage
+cd ..
+dify plugin package dify-plugin-myweather -o myweather-0.1.3.difypkg
+```
+
+`.difyignore` is the only filter — `.gitignore` is ignored — so it has to name
+`.env`, `.playwright-mcp/`, `tests/`, `docs/`, `__pycache__/` and the built
+package itself. Check the contents of the result before submitting it:
+
+```bash
+python -c "import zipfile;print(sorted(zipfile.ZipFile('myweather-0.1.3.difypkg').namelist()))"
 ```
 
 - [ ] Packaging command succeeds without errors
-- [ ] Generated `.difypkg` includes `manifest.yaml`, `main.py`, `requirements.txt`, `provider/`, `tools/`, and `_assets/icon.svg`
+- [ ] Generated `.difypkg` includes `manifest.yaml`, `main.py`, `requirements.txt`, `provider/`, `tools/`, `readme/`, and `_assets/icon.svg`
 - [ ] Generated `.difypkg` excludes `.git/`, `tests/`, `.env*`, `__pycache__/`, and local agent/tool directories
 - [ ] Plugin installs and runs in a Dify instance
 
