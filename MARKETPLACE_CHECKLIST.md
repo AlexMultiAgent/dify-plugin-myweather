@@ -14,6 +14,11 @@ Check each item before submitting to the Dify Marketplace.
 - [ ] `privacy` points to `./PRIVACY.md`
 - [ ] `tags` are valid Dify enum values (`weather`)
 - [ ] `meta.runner.language` is `python` and `version` matches the tested runtime (`3.12`)
+- [ ] `repo` is the source repository on an allowed host (github.com, gitlab.com, …)
+- [ ] `contact` is a reachable address — the Marketplace requires it, so use the
+      GitHub noreply address rather than a personal mailbox
+- [ ] `network.domains` lists every host the plugin actually calls
+      (`wttr.in`, `api.open-meteo.com`, `geocoding-api.open-meteo.com`)
 
 ## Provider
 
@@ -33,6 +38,14 @@ Check each item before submitting to the Dify Marketplace.
 - [ ] Open-Meteo CC BY 4.0 compliance notice is emitted when source is `open-meteo`
 - [ ] Attribution links are correct in README and code comments
 
+## README
+
+- [ ] `README.md` primary content is English — localized prose and CJK examples
+      belong in `README.<locale>.md` (the Marketplace reads `README.zh-Hans.md`)
+- [ ] `README.md` states the connection requirements (the hosts the plugin calls)
+- [ ] `README.md` links the source repository on an allowed host
+- [ ] No personal email address in the README or the manifest
+
 ## Packaging
 
 `dify plugin package` archives every file in the target directory — it ignores `.gitignore` and
@@ -41,7 +54,7 @@ does not honour `.difypkgignore` — so stage a runtime-only copy before packagi
 ```bash
 STAGE=../myweather-stage
 rm -rf "$STAGE" && mkdir -p "$STAGE"
-cp manifest.yaml main.py requirements.txt pyproject.toml icon.svg README.md LICENSE PRIVACY.md "$STAGE/"
+cp manifest.yaml main.py requirements.txt pyproject.toml icon.svg README.md README.zh-Hans.md LICENSE PRIVACY.md "$STAGE/"
 cp -r _assets provider tools "$STAGE/"
 find "$STAGE" -name '__pycache__' -type d -prune -exec rm -rf {} +
 cd .. && dify plugin package myweather-stage

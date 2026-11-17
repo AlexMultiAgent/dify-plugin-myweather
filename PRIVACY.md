@@ -8,7 +8,7 @@ The plugin processes the following user-provided data:
 
 - Location query text (for example: `Shanghai`, `New York`, `JFK`)
 
-The plugin does not require account login, API keys, passwords, or payment data.
+The plugin does not require account login, API keys, passwords, or billing details.
 
 ## 2. How Data Is Used
 

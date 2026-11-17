@@ -15,13 +15,17 @@ MyWeather is a Dify weather plugin that requires no API key.
 
 > London, England, United Kingdom: Partly cloudy. Temp 12.0 °C, feels like 10.5 °C, humidity 72%, wind 11.0 km/h.
 
-**Korean** (input: `서울`)
+**Korean** (input: the Hangul name of Seoul)
 
-> Seoul, South Korea: 구름많음. 기온 12.6°C, 체감 10.1°C, 습도 61%, 풍속 7.0 km/h.
+```text
+Seoul, South Korea: 구름많음. 기온 12.6°C, 체감 10.1°C, 습도 61%, 풍속 7.0 km/h.
+```
 
-**Japanese** (input: `横浜`)
+**Japanese** (input: the kanji name of Yokohama)
 
-> 横浜市, 神奈川県, 日本：曇り。気温 15.5°C、体感 12.5°C、湿度 51%、風速 9.0 km/h。
+```text
+横浜市, 神奈川県, 日本：曇り。気温 15.5°C、体感 12.5°C、湿度 51%、風速 9.0 km/h。
+```
 
 Workflow: `Start (city) → Weather Lookup → Output`
 
@@ -34,6 +38,20 @@ Workflow: `Start (city) → Weather Lookup → Output`
    - `wttr`: wttr first, Open-Meteo fallback
    - Native-script Japanese and Korean names always use Open-Meteo directly
 4. Pass user location text to `location`.
+
+## Connection Requirements
+
+The plugin makes outbound HTTPS requests to three hosts and needs no API key,
+account, token, or other credential:
+
+| Host | Purpose |
+| --- | --- |
+| `api.open-meteo.com` | Open-Meteo forecast endpoint |
+| `geocoding-api.open-meteo.com` | Open-Meteo place-name lookup |
+| `wttr.in` | Fallback weather source |
+
+If the Dify deployment restricts outbound traffic, allow these three hosts.
+Only the place name the user typed is sent; see [PRIVACY.md](./PRIVACY.md).
 
 ## Tool Parameters
 
@@ -83,37 +101,43 @@ Han-only place names can be identical across languages. Automatic detection uses
 bounded alias table for common regions and cities; set `language` explicitly when
 the same Han name is ambiguous in context.
 
-## Compliance Notes
-
-- For CC BY scenarios, render `open_meteo_compliance_notice` in a visible area when `source=open-meteo`.
-- Do not silently drop `open_meteo_compliance_notice` when Open-Meteo is the actual source.
-- `source` and `source_display` are useful for traceability and UI, but they do not replace `open_meteo_compliance_notice`.
-- `rate_limit_notice` is returned only when Open-Meteo fails and fallback is activated.
-
 ## Place Name Resolution
 
 Both providers index place names in Latin script, and neither handles native-script
 Japanese or Korean names on its own — so the plugin transliterates the query before
 geocoding it:
 
-| Input | Transliterated to | How |
+| Input script | Transliterated to | How |
 | --- | --- | --- |
-| Hangul (`서울`, `부산`) | `seoul`, `busan` | Revised Romanization, plus the administrative suffix (`수원시` → `suwon`) is dropped |
-| Kana (`とうきょう`, `さっぽろ`) | `tokyo`, `sapporo` | Hepburn |
-| Japanese kanji (`横浜`) | `横浜市`, `横浜都` | Administrative-suffix variants, because the bare name can match an unrelated hamlet in another prefecture |
-| Chinese (`北京`, `上海`) | — | Already indexed natively |
-| Taiwan / Hong Kong / Macau (`台北`, `香港`) | `Taipei`, `Hong Kong` | The upstream index stores these under their English names |
+| Hangul | `seoul`, `busan` | Revised Romanization; the administrative suffix (`수원시` → `suwon`) is dropped |
+| Kana | `tokyo`, `sapporo` | Hepburn |
+| Japanese kanji | `Yokohama-shi`, `Yokohama-to` | Administrative-suffix variants, because the bare name can match an unrelated hamlet in another prefecture |
+| Chinese | — | Already indexed natively, so the query is passed through |
+| Taiwan / Hong Kong / Macau | `Taipei`, `Hong Kong` | The upstream index stores these under their English names |
+
+Worked examples:
+
+```text
+서울      -> seoul
+부산      -> busan
+수원시    -> suwon
+とうきょう -> tokyo
+さっぽろ  -> sapporo
+横浜      -> 横浜市, 横浜都
+北京      -> (native, no transliteration needed)
+台北      -> Taipei
+```
 
 Both romanizers are deterministic — Unicode syllable decomposition for Hangul, a fixed
 table for kana — so no phonetic dictionary ships with the plugin and there is nothing
 to maintain. The one lookup table is the administrative divisions of Taiwan, Hong Kong
 and Macau, which changes very rarely.
 
-wttr.in cannot resolve native-script Japanese or Korean names at all: it answers `서울`
-with a village called Ryongsan and `とうきょう` with a district called Takehiracho.
-Those inputs are therefore always resolved through Open-Meteo, whatever
-`source_preference` says, and the reported `location` always names the place the
-provider actually matched.
+wttr.in cannot resolve native-script Japanese or Korean names at all: it answers the
+Hangul name of Seoul with a village called Ryongsan, and the kana name of Tokyo with a
+district called Takehiracho. Those inputs are therefore always resolved through
+Open-Meteo, whatever `source_preference` says, and the reported `location` always
+names the place the provider actually matched.
 
 ## Open-Meteo and wttr.in Notes
 
@@ -142,9 +166,12 @@ References:
 
 ## Support
 
+- Source repository: https://github.com/AlexMultiAgent/dify-plugin-myweather
 - GitHub profile: https://github.com/AlexMultiAgent
 - GitHub Issues: https://github.com/AlexMultiAgent/dify-plugin-myweather/issues
 
 ## License
 
 MIT License. See [LICENSE](./LICENSE).
+
+For the Simplified Chinese version of this document, see [README.zh-Hans.md](./README.zh-Hans.md).

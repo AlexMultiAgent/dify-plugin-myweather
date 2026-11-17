@@ -38,11 +38,6 @@ TOTAL_LOOKUP_TIMEOUT = 90
 MAX_LOCATION_CANDIDATES = 4
 # When updating the plugin version, also update manifest.yaml and pyproject.toml.
 USER_AGENT = "dify-myweather-plugin/0.1.3"
-OPEN_METEO_SITE_URL = "https://open-meteo.com"
-OPEN_METEO_LICENCE_URL = "https://open-meteo.com/en/licence"
-OPEN_METEO_TERMS_URL = "https://open-meteo.com/en/terms"
-OPEN_METEO_PRICING_URL = "https://open-meteo.com/en/pricing"
-WTTR_HELP_URL = "https://wttr.in/:help"
 
 LANGUAGE_VALUES = frozenset({"auto", "en-US", "zh-Hans", "zh-Hant", "ja", "ko"})
 
