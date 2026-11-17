@@ -167,6 +167,9 @@ wttr.in：
 `requirements.txt` 从 `uv.lock` 导出并锁定全部运行时依赖的精确版本。每次推送和
 拉取请求都会在 CI 中执行：
 
+打包命令需要 Dify Plugin CLI。CI 固定下载
+`langgenius/dify-plugin-daemon` `0.6.15` 发布二进制。
+
 ```bash
 uv sync --locked --group dev
 uv run pytest -q
@@ -175,7 +178,7 @@ uv run ruff format --check .
 uv run pyright
 uv run pip-audit --no-deps --disable-pip -r requirements.txt
 cd ..
-uv run --project dify-plugin-myweather dify plugin package dify-plugin-myweather -o myweather-ci.difypkg
+dify plugin package dify-plugin-myweather -o myweather-ci.difypkg
 cd dify-plugin-myweather
 uv run python scripts/verify_package.py ../myweather-ci.difypkg --source-root .
 ```

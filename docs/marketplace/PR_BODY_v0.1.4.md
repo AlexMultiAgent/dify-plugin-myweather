@@ -73,5 +73,5 @@ AlexMultiAgent/myweather/myweather-0.1.4.difypkg
 Package SHA-256:
 
 ```text
-75fb62ef8b75fa21f586ab8acfd285287a8301358ff0c55beabe5309ddb5942d
+fbe203d107aad3b8d12431420b697759ff3e35fc3721ca1b5325e1537858a69f
 ```

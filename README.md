@@ -177,6 +177,9 @@ wttr.in:
 Runtime dependencies in `requirements.txt` are exported from `uv.lock` with exact
 versions. CI runs the same checks on every push and pull request:
 
+The packaging commands require the Dify Plugin CLI. CI downloads the pinned
+`langgenius/dify-plugin-daemon` `0.6.15` release binary.
+
 ```bash
 uv sync --locked --group dev
 uv run pytest -q
@@ -185,7 +188,7 @@ uv run ruff format --check .
 uv run pyright
 uv run pip-audit --no-deps --disable-pip -r requirements.txt
 cd ..
-uv run --project dify-plugin-myweather dify plugin package dify-plugin-myweather -o myweather-ci.difypkg
+dify plugin package dify-plugin-myweather -o myweather-ci.difypkg
 cd dify-plugin-myweather
 uv run python scripts/verify_package.py ../myweather-ci.difypkg --source-root .
 ```
