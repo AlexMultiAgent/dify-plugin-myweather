@@ -242,13 +242,21 @@ def test_select_candidate_penalizes_wrong_country():
     assert best["country_code"] == "AT"
 
 
-def test_select_candidate_returns_first_when_all_equal():
+def test_select_candidate_rejects_names_without_a_match():
     candidates = [
         _make_candidate("A", "XX"),
         _make_candidate("B", "XX"),
     ]
-    best = _select_open_meteo_candidate(candidates, "Unknown")
-    assert best["name"] in ("A", "B")
+    with pytest.raises(ValueError, match="no acceptable match"):
+        _select_open_meteo_candidate(candidates, "Unknown")
+
+
+def test_select_candidate_rejects_a_fuzzy_unrelated_name():
+    candidates = [
+        _make_candidate("Londrina", "BR", "PPLA2", 575000),
+    ]
+    with pytest.raises(ValueError, match="no acceptable match"):
+        _select_open_meteo_candidate(candidates, "London")
 
 
 def test_select_candidate_scoring_by_population():
@@ -550,6 +558,22 @@ def test_country_hints_do_not_match_latin_substrings():
     assert _infer_country_hints("Chinatown, San Francisco") == []
     assert _infer_country_hints("Koreatown, Los Angeles") == []
     assert _infer_country_hints("China Lake") == []
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_hints", "expected_language"),
+    [
+        ("连江县", [], "zh-Hans"),
+        ("连江县, 中国", ["CN"], "zh-Hans"),
+        ("连江县, 台湾", ["TW"], "zh-Hant"),
+        ("台湾连江县", ["TW"], "zh-Hant"),
+    ],
+)
+def test_ambiguous_native_place_alias_requires_region_context(
+    query, expected_hints, expected_language
+):
+    assert _infer_country_hints(query) == expected_hints
+    assert _resolve_language("auto", query) == expected_language
 
 
 # ---------------------------------------------------------------------------
@@ -957,7 +981,13 @@ def _build_mock_session(
         if "geocoding" in url:
             if callable(geocode_side_effect):
                 return geocode_side_effect()
-            return _make_resp(geocode_data or _mock_open_meteo_geocode_response())
+            if geocode_data is not None:
+                return _make_resp(geocode_data)
+            return _make_resp(
+                _mock_open_meteo_geocode_response(
+                    name=kwargs["params"]["name"],
+                )
+            )
         if "forecast" in url:
             if callable(forecast_side_effect):
                 return forecast_side_effect()
@@ -1098,7 +1128,7 @@ def test_get_weather_limits_candidate_fanout(monkeypatch):
     with pytest.raises(WeatherLookupError, match="All weather sources failed"):
         get_weather("a和b和c和d和e和f", preferred_source="open-meteo")
 
-    assert len(attempted) == MAX_LOCATION_CANDIDATES
+    assert 1 <= len(attempted) <= MAX_LOCATION_CANDIDATES
 
 
 def test_get_weather_does_not_start_fallback_after_deadline(monkeypatch):
@@ -1132,6 +1162,36 @@ def test_get_weather_stops_open_meteo_after_network_failure(monkeypatch):
         raise WeatherLookupError("wttr unavailable")
 
     monkeypatch.setattr("tools.weather_logic._fetch_from_open_meteo", timeout)
+    monkeypatch.setattr("tools.weather_logic._fetch_from_wttr", fail_wttr)
+
+    with pytest.raises(WeatherLookupError, match="All weather sources failed"):
+        get_weather(
+            "a和b和c和d和e和f",
+            preferred_source="open-meteo",
+            language="zh-Hans",
+        )
+
+    assert len(open_meteo_calls) == 1
+
+
+@pytest.mark.parametrize("status_code", [429, 503])
+def test_get_weather_stops_open_meteo_after_provider_wide_http_failure(
+    status_code, monkeypatch
+):
+    open_meteo_calls: list[str] = []
+    error_response = Mock(spec=requests.Response)
+    error_response.status_code = status_code
+
+    def fail(candidate, *_args, **_kwargs):
+        open_meteo_calls.append(candidate)
+        raise requests.HTTPError(
+            f"{status_code} provider-wide failure", response=error_response
+        )
+
+    def fail_wttr(*_args, **_kwargs):
+        raise WeatherLookupError("wttr unavailable")
+
+    monkeypatch.setattr("tools.weather_logic._fetch_from_open_meteo", fail)
     monkeypatch.setattr("tools.weather_logic._fetch_from_wttr", fail_wttr)
 
     with pytest.raises(WeatherLookupError, match="All weather sources failed"):
@@ -1465,12 +1525,66 @@ def test_open_meteo_queries_strips_query_noise_before_romanizing():
     assert queries[0] == ("seoul", "en")
 
 
+@pytest.mark.parametrize("location", ["连江县", "连江县, 中国"])
+@pytest.mark.parametrize("language", ["zh-Hans", "en-US"])
+def test_open_meteo_queries_strips_chinese_county_suffix(location, language):
+    queries = _open_meteo_queries(location, language)
+    query_names = [name for name, _language in queries[:MAX_LOCATION_CANDIDATES]]
+
+    assert "连江" in query_names
+    assert "中国" not in query_names
+
+
+@pytest.mark.parametrize(
+    ("location", "expected_first"),
+    [("高松", "高松市"), ("金沢", "金沢市")],
+)
+def test_explicit_ja_prefers_city_suffix_variants(location, expected_first):
+    assert _open_meteo_queries(location, "ja")[0] == (expected_first, "ja")
+
+
 def test_open_meteo_queries_does_not_fragment_a_pure_kana_name():
     # "きょうと" must stay whole; "きょう" resolves to Kyo in Comoros.
     assert _open_meteo_queries("きょうと", "ja") == [
         ("kyoto", "en"),
         ("きょうと", "ja"),
     ]
+
+
+@pytest.mark.parametrize("location", ["今治", "今治市"])
+def test_explicit_ja_geocodes_with_japanese_language_and_japan_context(location):
+    session = Mock(spec=requests.Session)
+    geocode_requests = []
+
+    def side_effect(method, url, **kwargs):
+        response = Mock(spec=requests.Response)
+        response.raise_for_status.return_value = None
+        response.status_code = 200
+        if "geocoding" in url:
+            geocode_requests.append(kwargs["params"].copy())
+            if kwargs["params"]["name"] == "今治":
+                response.json.return_value = _mock_open_meteo_geocode_response(
+                    "今治", "JP", "PPLA2", population=170986, lat=34.07, lon=133.0
+                )
+            else:
+                response.json.return_value = {"results": []}
+        else:
+            response.json.return_value = _mock_open_meteo_forecast_response()
+        return response
+
+    session.request.side_effect = side_effect
+
+    result = get_weather(
+        location, language="ja", preferred_source="open-meteo", session=session
+    )
+
+    assert result["location"] == "今治, Test Admin, Test Country"
+    assert any(
+        request["name"] == "今治"
+        and request["language"] == "ja"
+        and request["countryCode"] == "JP"
+        for request in geocode_requests
+    )
 
 
 def test_kana_input_is_treated_as_japanese():
@@ -1509,7 +1623,9 @@ def test_get_weather_uses_open_meteo_for_kana_even_when_wttr_is_preferred():
             raise AssertionError("wttr.in must not be queried for kana input")
         resp = Mock(spec=requests.Response)
         if "geocoding" in url:
-            resp.json.return_value = _mock_open_meteo_geocode_response("東京都", "JP")
+            resp.json.return_value = _mock_open_meteo_geocode_response(
+                kwargs["params"]["name"], "JP"
+            )
         else:
             resp.json.return_value = _mock_open_meteo_forecast_response()
         resp.raise_for_status.return_value = None
@@ -1542,6 +1658,33 @@ def test_get_weather_uses_open_meteo_for_japanese_han_when_wttr_is_preferred():
         "岐阜", language="auto", preferred_source="wttr", session=session
     )
     assert result["source"] == "open-meteo"
+
+
+@pytest.mark.parametrize("language", ["zh-Hans", "en-US"])
+def test_get_weather_uses_open_meteo_for_chinese_admin_subdivision(language):
+    session = Mock(spec=requests.Session)
+
+    def side_effect(method, url, **kwargs):
+        if "wttr.in" in url:
+            raise AssertionError(
+                "wttr.in must not be queried for a Chinese county-level name"
+            )
+        resp = Mock(spec=requests.Response)
+        if "geocoding" in url:
+            resp.json.return_value = _mock_open_meteo_geocode_response(
+                "连江", "CN", "PPLA2", population=600000, lat=26.2, lon=119.5
+            )
+        else:
+            resp.json.return_value = _mock_open_meteo_forecast_response()
+        resp.raise_for_status.return_value = None
+        return resp
+
+    session.request.side_effect = side_effect
+    result = get_weather(
+        "连江县", language=language, preferred_source="wttr", session=session
+    )
+    assert result["source"] == "open-meteo"
+    assert result["location"].startswith("连江")
 
 
 def test_get_weather_queries_open_meteo_with_the_romanized_name():

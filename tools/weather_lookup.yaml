@@ -138,11 +138,11 @@ parameters:
     ja_JP: データソース優先
     ko_KR: 데이터 소스 우선
   human_description:
-    en_US: Choose the primary source. The other provider is normally used as fallback. Native-script Japanese and Korean names always use Open-Meteo directly because wttr.in returns a same-sounding neighbourhood instead of the city.
-    zh_Hans: 选择主数据源，通常由另一数据源兜底。日文与韩文地名始终直接通过 Open-Meteo 解析，因为 wttr.in 会返回同音的邻近地区而非目标城市。
-    zh_Hant: 選擇主資料來源，通常由另一資料來源兜底。日文與韓文地名一律直接透過 Open-Meteo 解析，因為 wttr.in 會回傳同音的鄰近地區而非目標城市。
-    ja_JP: 優先データソースを選択します。通常は別のプロバイダーをフォールバックに使用します。日本語と韓国語の地名は、wttr.in が同名の近隣地を返すため、常に Open-Meteo を直接使用します。
-    ko_KR: 주 데이터 소스를 선택합니다. 일반적으로 다른 공급자를 대체 수단으로 사용합니다. 일본어와 한국어 지명은 wttr.in이 같은 이름의 인근 지역을 반환하므로 항상 Open-Meteo를 직접 사용합니다.
+    en_US: Choose the primary source. The other provider is normally used as fallback. Native-script Japanese and Korean names, plus Chinese county and district names, always use Open-Meteo directly because wttr.in can return a same-sounding place instead of the target.
+    zh_Hans: 选择主数据源，通常由另一数据源兜底。日文、韩文地名以及中国县级、区级等行政区划名称始终直接通过 Open-Meteo 解析，因为 wttr.in 可能返回同音的其他地点。
+    zh_Hant: 選擇主資料來源，通常由另一資料來源兜底。日文、韓文地名以及中國縣級、區級等行政區劃名稱一律直接透過 Open-Meteo 解析，因為 wttr.in 可能回傳同音的其他地點。
+    ja_JP: 優先データソースを選択します。通常は別のプロバイダーをフォールバックに使用します。日本語と韓国語の地名、および中国の県・区などの行政区画名は、wttr.in が同音の別地点を返す可能性があるため、常に Open-Meteo を直接使用します。
+    ko_KR: 주 데이터 소스를 선택합니다. 일반적으로 다른 공급자를 대체 수단으로 사용합니다. 일본어와 한국어 지명 및 중국의 현·구 등 행정 구역명은 wttr.in이 같은 이름의 다른 장소를 반환할 수 있으므로 항상 Open-Meteo를 직접 사용합니다.
   options:
   - label:
       en_US: wttr.in first (Open-Meteo fallback)

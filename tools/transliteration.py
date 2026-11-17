@@ -426,6 +426,8 @@ def japanese_place_variants(name: str) -> list[str]:
     name = (name or "").strip()
     if not name or not has_kanji(name):
         return []
+    if name[-1] == "市" and len(name) > 2:
+        return [name[:-1]]
     if name[-1] in _JAPANESE_SUFFIX_CHARS:
         return []
     # "東京都" already carries the suffix, but "京都" is a city name that happens

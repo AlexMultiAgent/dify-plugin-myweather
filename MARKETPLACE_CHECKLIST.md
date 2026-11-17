@@ -65,7 +65,7 @@ dify plugin package dify-plugin-myweather -o myweather-0.1.4.difypkg
 package itself. Check the contents of the result before submitting it:
 
 ```bash
-python -c "import zipfile;print(sorted(zipfile.ZipFile('myweather-0.1.4.difypkg').namelist()))"
+uv run python scripts/verify_package.py ../myweather-0.1.4.difypkg --source-root .
 ```
 
 - [ ] Packaging command succeeds without errors
@@ -90,6 +90,8 @@ pip-audit --no-deps --disable-pip -r requirements.txt
 - [ ] `pyright --project pyproject.toml` reports zero errors
 - [ ] `pip-audit --no-deps --disable-pip -r requirements.txt` reports no known vulnerabilities
 - [ ] `.github/workflows/ci.yml` passes on the release commit
+- [ ] CI builds and verifies the runtime `.difypkg`
+- [ ] Every published version has a matching `vX.Y.Z` Git tag
 
 ## Functional
 
@@ -100,6 +102,8 @@ pip-audit --no-deps --disable-pip -r requirements.txt
 - [ ] A semantically empty weather payload falls back instead of returning an all-null success
 - [ ] A wttr.in result with a conflicting country/region is rejected
 - [ ] Language auto-detection works for Korean (Hangul), Japanese (kana), Chinese (CJK)
+- [ ] Ambiguous Japanese Han names resolve correctly when `language=ja`
+- [ ] Mainland county names such as `连江县` do not resolve through Taiwan aliases
 - [ ] Taiwan / Hong Kong / Macau place names resolve to Traditional Chinese
 - [ ] Explicit language selection overrides auto-detection
 - [ ] `uscs` unit selection shows Fahrenheit and mph
@@ -119,6 +123,8 @@ raw query — a wrong match must never hide behind the user's own wording.
 - [ ] `부산` resolves to Busan
 - [ ] `とうきょう` resolves to Tokyo, not to an unrelated district
 - [ ] `横浜` resolves to 横浜市 (神奈川県), not to a hamlet in another prefecture
+- [ ] `高松`, `金沢`, and `今治市` resolve to their Japanese cities with `language=ja`
 - [ ] `台北` resolves to Taipei
+- [ ] `连江县` resolves to 连江 (福建省), not to Taiwan
 - [ ] `深圳` resolves to Shenzhen, not to Hong Kong
 - [ ] `北京` resolves to 北京 (北京市)

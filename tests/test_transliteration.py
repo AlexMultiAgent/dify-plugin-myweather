@@ -139,8 +139,9 @@ def test_japanese_place_variants():
     assert japanese_place_variants("京都") == ["京都市", "京都都"]
 
 
-def test_japanese_place_variants_skips_names_with_suffix():
-    assert japanese_place_variants("横浜市") == []
+def test_japanese_place_variants_strips_a_trailing_city_suffix():
+    assert japanese_place_variants("横浜市") == ["横浜"]
+    assert japanese_place_variants("今治市") == ["今治"]
     assert japanese_place_variants("東京都") == []
     assert japanese_place_variants("大阪府") == []
 

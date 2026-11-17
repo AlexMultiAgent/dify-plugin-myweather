@@ -313,6 +313,35 @@ _SPLIT_MARKERS_MAP = {
     "ko": KO_QUERY_SPLIT_MARKERS,
 }
 
+_CJK_ADMIN_SUFFIXES = (
+    "特别行政区",
+    "自治县",
+    "自治州",
+    "市辖区",
+    "新区",
+    "县",
+    "区",
+    "市",
+    "省",
+    "旗",
+    "盟",
+    "州",
+)
+
+_COUNTRY_ONLY_FRAGMENTS = frozenset({"中国", "中國", "大陆", "大陸"})
+
+_WTTR_UNSAFE_CJK_SUFFIXES = (
+    "街道",
+    "自治县",
+    "自治旗",
+    "县",
+    "区",
+    "镇",
+    "乡",
+    "村",
+    "旗",
+)
+
 
 _RETRY_MAX = 2
 _RETRY_BACKOFF = 1.0
@@ -569,14 +598,35 @@ def _normalize_location_key(text: str) -> str:
     return re.sub(r"[\s,，。.;；:_\-/\\'`]+", "", normalized)
 
 
+def _cjk_location_variants(text: str) -> list[str]:
+    variants = [text]
+    for suffix in _CJK_ADMIN_SUFFIXES:
+        if text.endswith(suffix) and len(text) > len(suffix) + 1:
+            variants.append(text[: -len(suffix)])
+            break
+    return variants
+
+
 def _has_latin_place_name(text: str, names: set[str] | frozenset[str]) -> bool:
     components = {part.strip().lower() for part in text.split(",") if part.strip()}
     components.add(text.strip().lower())
     return bool(components & names)
 
 
+_TW_REGION_CONTEXT = ("台湾", "台灣", "臺灣")
+
+
 def _has_native_place_name(text: str, country_code: str) -> bool:
-    return any(place in text for place in country_place_names(country_code))
+    names = country_place_names(country_code)
+    if (
+        country_code == "TW"
+        and "连江" in names
+        and not any(marker in text for marker in _TW_REGION_CONTEXT)
+    ):
+        # Simplified "连江" is also the name of a mainland county. Treat the
+        #  Taiwan alias as meaningful only when the query supplies region context.
+        names = tuple(name for name in names if name != "连江")
+    return any(place in text for place in names)
 
 
 def _infer_country_hints(location: str) -> list[str]:
@@ -774,6 +824,8 @@ def _build_open_meteo_geocode_params(
         api_languages = ["en"]
 
     country_hints = _infer_country_hints(location)
+    if language == "ja" and _script_of(location) == "han" and not country_hints:
+        country_hints = ["JP"]
     country_candidates: list[str | None] = country_hints + [None]
 
     attempts: list[dict[str, Any]] = []
@@ -811,19 +863,24 @@ def _select_open_meteo_candidate(
     query_basis = _normalize_cjk_location_display(query, language) if is_cjk else query
     query_key = _normalize_location_key(query_basis)
 
-    best_match = candidates[0]
+    best_match: dict[str, Any] | None = None
     best_score = float("-inf")
 
     for index, candidate in enumerate(candidates):
         score = 0.0
         name_key = _normalize_location_key(str(candidate.get("name") or ""))
+        name_score = 0.0
 
         if query_key and name_key == query_key:
-            score += 220.0
+            name_score = 220.0
         elif query_key and query_key in name_key:
-            score += 140.0
+            name_score = 140.0
         elif query_key and name_key and name_key in query_key:
-            score += 70.0
+            name_score = 70.0
+
+        if name_score == 0:
+            continue
+        score += name_score
 
         candidate_country = str(candidate.get("country_code") or "").upper()
         if country_hint and candidate_country == country_hint:
@@ -847,6 +904,8 @@ def _select_open_meteo_candidate(
             best_score = score
             best_match = candidate
 
+    if best_match is None:
+        raise ValueError("Open-Meteo returned no acceptable match")
     return best_match
 
 
@@ -880,14 +939,23 @@ def _candidate_locations(query: str, language: str = "en-US") -> list[str]:
     if cleaned_en and cleaned_en != lowered:
         candidates.append(cleaned_en)
 
+    segmentation_language = language
+    if not _is_cjk_language(language) and _contains_cjk_chars(base):
+        segmentation_language = _detect_language(base)
+
     # CJK query cleanup and segmentation. A pure-kana query is a single place
     # name; splitting it on particles only produces fragments that resolve to
     # the wrong place ("きょうと" -> "きょう" -> Kyo in Comoros).
-    if _is_cjk_language(language) and not (has_kana(base) and not has_kanji(base)):
-        fragments = _extract_cjk_location_fragments(base, language)
+    if _is_cjk_language(segmentation_language) and not (
+        has_kana(base) and not has_kanji(base)
+    ):
+        fragments = _extract_cjk_location_fragments(base, segmentation_language)
         for frag in fragments:
-            if frag and frag != base:
-                candidates.append(frag)
+            if not frag or frag in _COUNTRY_ONLY_FRAGMENTS:
+                continue
+            for variant in _cjk_location_variants(frag):
+                if len(variant) >= 2 and variant not in candidates:
+                    candidates.append(variant)
 
     # De-duplicate while preserving order.
     deduped: list[str] = []
@@ -947,7 +1015,9 @@ def _transliteration_variants(
     return []
 
 
-def _api_language_for(candidate: str, country_hints: list[str]) -> str:
+def _api_language_for(
+    candidate: str, country_hints: list[str], output_language: str = "en-US"
+) -> str:
     """Language to ask Open-Meteo's geocoder for.
 
     The candidate names come back in this language, so it has to match the
@@ -960,6 +1030,8 @@ def _api_language_for(candidate: str, country_hints: list[str]) -> str:
     if script == "kana":
         return "ja"
     if script == "han":
+        if output_language == "ja":
+            return "ja"
         return "ja" if "JP" in country_hints else "zh"
     return "en"
 
@@ -976,13 +1048,24 @@ def _open_meteo_queries(
     natives: list[tuple[str, str]] = []
     for candidate in _candidate_locations(location, language):
         hints = _infer_country_hints(candidate)
+        if language == "ja" and _script_of(candidate) == "han" and not hints:
+            hints = ["JP"]
         for variant in _transliteration_variants(candidate, hints, language):
-            variants.append((variant, _api_language_for(variant, hints)))
-        natives.append((candidate, _api_language_for(candidate, hints)))
+            variants.append(
+                (variant, _api_language_for(variant, hints, output_language=language))
+            )
+        natives.append(
+            (
+                candidate,
+                _api_language_for(candidate, hints, output_language=language),
+            )
+        )
 
     location_hints = _infer_country_hints(location)
-    chinese_native_first = _script_of(location) == "han" and not any(
-        hint in ("JP", "TW", "HK", "MO") for hint in location_hints
+    chinese_native_first = (
+        language != "ja"
+        and _script_of(location) == "han"
+        and not any(hint in ("JP", "TW", "HK", "MO") for hint in location_hints)
     )
     if chinese_native_first:
         # Mainland Chinese names are indexed natively, so the Latin alias is only
@@ -1009,6 +1092,13 @@ def _normalize_cjk_location_display(text: str, language: str = "zh-Hans") -> str
     cleaned = re.sub(r"[？！!。；;：:（）\[\]{}?]", " ", text or "")
     cleaned = re.sub(r"\s+", " ", cleaned).strip("，,。.;； ")
     return cleaned or text
+
+
+def _requires_open_meteo_for_cjk_admin_subdivision(location: str) -> bool:
+    if not has_kanji(location):
+        return False
+    display = _normalize_cjk_location_display(location, "zh-Hans")
+    return display.endswith(_WTTR_UNSAFE_CJK_SUFFIXES)
 
 
 def _fetch_from_wttr(
@@ -1267,6 +1357,17 @@ def _is_open_meteo_rate_limited(exc: Exception) -> bool:
     return False
 
 
+def _is_provider_wide_failure(exc: Exception) -> bool:
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    if isinstance(exc, requests.HTTPError):
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", None)
+        if isinstance(status, int):
+            return status == 429 or 300 <= status < 400 or status >= 500
+    return False
+
+
 def _build_open_meteo_fallback_notice(
     language: str = "en-US", rate_limited: bool = False
 ) -> str:
@@ -1457,9 +1558,17 @@ def get_weather(
             location_script == "han"
             and ("JP" in _infer_country_hints(location) or output_language == "ja")
         )
-        if location_script == "hangul" or is_native_japanese:
+        requires_open_meteo_admin_match = (
+            _requires_open_meteo_for_cjk_admin_subdivision(location)
+        )
+        if (
+            location_script == "hangul"
+            or is_native_japanese
+            or requires_open_meteo_admin_match
+        ):
             # wttr.in answers native-script Japanese and Korean place names with
-            # a same-sounding neighbourhood instead of the city.
+            # a same-sounding neighbourhood instead of the city. It also lacks
+            # reliable county/district matching for Chinese administrative names.
             attempts = ["open-meteo"]
 
         for source in attempts:
@@ -1505,9 +1614,9 @@ def get_weather(
                         if _is_open_meteo_rate_limited(exc):
                             open_meteo_rate_limited = True
                     errors[f"{source}({candidate})"] = str(exc)
-                    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
-                        # A connection or read timeout is provider-wide; trying
-                        # more candidate spellings only multiplies the outage delay.
+                    if _is_provider_wide_failure(exc):
+                        # Retrying another spelling cannot fix an upstream outage,
+                        # throttling response, or rejected redirect.
                         break
                     continue
 

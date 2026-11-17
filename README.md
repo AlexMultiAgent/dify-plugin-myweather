@@ -36,7 +36,7 @@ Workflow: `Start (city) → Weather Lookup → Output`
 3. Set `source_preference`:
    - `open-meteo` (default): Open-Meteo first, wttr fallback for supported scripts
    - `wttr`: wttr first, Open-Meteo fallback
-   - Native-script Japanese and Korean names always use Open-Meteo directly
+   - Native-script Japanese/Korean names and Chinese county/district names always use Open-Meteo directly
 4. Pass user location text to `location`.
 
 ## Connection Requirements
@@ -57,7 +57,7 @@ Only the place name the user typed is sent; see [PRIVACY.md](./PRIVACY.md).
 
 - `location` (required): city, region, airport code, or place name. Supports English, Chinese, Japanese, and Korean.
 - `location` is limited to 200 characters to keep upstream requests and logs bounded.
-- `language` (optional): output language. `auto` (default) detects from input — Hangul → Korean, hiragana/katakana → Japanese, recognized Taiwan / Hong Kong / Macau / Japan place names → their regional language, other CJK → Simplified Chinese, otherwise English. Set it explicitly for ambiguous Han-only names. Supported explicit values are `en-US`, `zh-Hans`, `zh-Hant`, `ja`, and `ko`.
+- `language` (optional): output language. `auto` (default) detects from input — Hangul → Korean, hiragana/katakana → Japanese, recognized Taiwan / Hong Kong / Macau / Japan place names → their regional language, other CJK → Simplified Chinese, otherwise English. Set `ja` explicitly for an ambiguous Japanese Han-only name; Open-Meteo is then queried with Japanese names and Japan-first filtering. Supported explicit values are `en-US`, `zh-Hans`, `zh-Hant`, `ja`, and `ko`.
 - `units` (optional): `metric` or `uscs`.
 - `source_preference` (optional): `open-meteo` (default) or `wttr`.
 - `include_raw_json` (optional): include the raw upstream provider payload in the JSON output, under the `raw` key.
@@ -108,17 +108,20 @@ the same Han name is ambiguous in context.
 
 ## Place Name Resolution
 
-Both providers index place names in Latin script, and neither handles native-script
-Japanese or Korean names on its own — so the plugin transliterates the query before
-geocoding it:
+The providers have different indexing and localization behavior. wttr.in mostly
+resolves Latin and Chinese queries and can return a nearby feature for native-script
+Japanese or Korean names. Open-Meteo accepts English, Chinese, Japanese, and Korean
+results, but its coverage and preferred spelling vary. The plugin therefore sends
+language-matched native names, Latin transliterations, and a small set of bounded
+regional variants:
 
-| Input script | Transliterated to | How |
+| Input script | Query candidates | How |
 | --- | --- | --- |
-| Hangul | `seoul`, `busan` | Revised Romanization; the administrative suffix (`수원시` → `suwon`) is dropped |
-| Kana | `tokyo`, `sapporo` | Hepburn |
-| Japanese kanji | `Yokohama-shi`, `Yokohama-to` | Administrative-suffix variants, because the bare name can match an unrelated hamlet in another prefecture |
-| Chinese | — | Already indexed natively, so the query is passed through |
-| Taiwan / Hong Kong / Macau | `Taipei`, `Hong Kong` | The upstream index stores these under their English names |
+| Hangul | `seoul`, `busan`, plus the native name | Revised Romanization; the administrative suffix (`수원시` → `suwon`) is dropped |
+| Kana | `tokyo`, `sapporo`, plus the native name | Hepburn |
+| Japanese kanji | Native name, bare city name, and bounded `市`/`都` variants | Explicit `language=ja` requests Japanese names with Japan-first filtering |
+| Chinese | Native name | Use the native name, with bounded regional aliases when needed |
+| Taiwan / Hong Kong / Macau | `Taipei`, `Hong Kong`, plus native aliases | The Latin alias is preferred when regional context is recognized |
 
 Worked examples:
 
@@ -129,14 +132,17 @@ Worked examples:
 とうきょう -> tokyo
 さっぽろ  -> sapporo
 横浜      -> 横浜市, 横浜都
+今治市    -> 今治, 今治市
 北京      -> (native, no transliteration needed)
 台北      -> Taipei
 ```
 
 Both romanizers are deterministic — Unicode syllable decomposition for Hangul, a fixed
-table for kana — so no phonetic dictionary ships with the plugin and there is nothing
-to maintain. The one lookup table is the administrative divisions of Taiwan, Hong Kong
-and Macau, which changes very rarely.
+table for kana — so no phonetic dictionary ships with the plugin. The project does
+keep bounded maintenance data for regional place-name detection, query-noise removal,
+Japanese administrative variants, and Taiwan/Hong Kong/Macau aliases. Adding broad
+place-name coverage should use upstream geocoding rather than expanding these tables
+without limit.
 
 wttr.in cannot resolve native-script Japanese or Korean names at all: it answers the
 Hangul name of Seoul with a village called Ryongsan, and the kana name of Tokyo with a
@@ -158,6 +164,8 @@ wttr.in:
 
 - Resolves Latin-script and Chinese place names, but maps Japanese and Korean names to a
   nearby feature instead of the city, so it is not used for native-script Japanese or Korean.
+- Chinese county, district, township, and village names also use Open-Meteo directly;
+  wttr.in often accepts them but resolves to a same-sounding place elsewhere.
 - Can provide localized weather descriptions.
 - A wttr.in result is rejected when its country conflicts with a recognized
   regional hint, or when a Han-only query that defaults to Simplified Chinese is
@@ -176,9 +184,15 @@ uv run ruff check .
 uv run ruff format --check .
 uv run pyright
 uv run pip-audit --no-deps --disable-pip -r requirements.txt
+cd ..
+uv run --project dify-plugin-myweather dify plugin package dify-plugin-myweather -o myweather-ci.difypkg
+cd dify-plugin-myweather
+uv run python scripts/verify_package.py ../myweather-ci.difypkg --source-root .
 ```
 
 The plugin itself does not log raw location text, including at debug level.
+The package verifier rejects development files and requires every runtime file to
+match the source tree byte for byte.
 
 References:
 
