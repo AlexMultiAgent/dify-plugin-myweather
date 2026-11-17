@@ -5,6 +5,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 VERIFIER = ROOT / "scripts" / "verify_package.py"
 REQUIRED = (
@@ -64,9 +66,10 @@ def test_package_verifier_accepts_a_complete_runtime_archive(tmp_path):
     assert "verified" in result.stdout
 
 
-def test_package_verifier_rejects_development_files(tmp_path):
+@pytest.mark.parametrize("extra", ["tests/test_secret.py", "CHANGELOG.md"])
+def test_package_verifier_rejects_development_files(tmp_path, extra):
     package = tmp_path / "myweather.difypkg"
-    _write_package(package, extra="tests/test_secret.py")
+    _write_package(package, extra=extra)
 
     result = _run_verifier(package)
 

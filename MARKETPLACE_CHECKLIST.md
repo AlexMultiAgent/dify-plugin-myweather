@@ -19,6 +19,7 @@ Check each item before submitting to the Dify Marketplace.
 - [ ] `repo` is the source repository on an allowed host (github.com, gitlab.com, …)
 - [ ] `contact` is a reachable address — the Marketplace requires it, so use the
       GitHub noreply address rather than a personal mailbox
+- [ ] `CHANGELOG.md` starts with the manifest version and describes user-visible changes
 - [ ] `network.domains` lists every host the plugin actually calls
       (`wttr.in`, `api.open-meteo.com`, `geocoding-api.open-meteo.com`)
 
@@ -92,6 +93,8 @@ pip-audit --no-deps --disable-pip -r requirements.txt
 - [ ] `.github/workflows/ci.yml` passes on the release commit
 - [ ] CI builds and verifies the runtime `.difypkg`
 - [ ] Every published version has a matching `vX.Y.Z` Git tag
+- [ ] The matching GitHub Release contains the versioned `.difypkg`
+- [ ] The Marketplace update PR changes exactly one file: the new `.difypkg`
 
 ## Functional
 

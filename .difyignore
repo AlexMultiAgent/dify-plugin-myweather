@@ -17,6 +17,7 @@ __pycache__
 tests
 docs
 scripts
+CHANGELOG.md
 *.difypkg
 .env
 .env.example

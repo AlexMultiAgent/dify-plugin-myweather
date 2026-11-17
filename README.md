@@ -194,6 +194,13 @@ The plugin itself does not log raw location text, including at debug level.
 The package verifier rejects development files and requires every runtime file to
 match the source tree byte for byte.
 
+## Releasing
+
+Release notes are maintained in [CHANGELOG.md](./CHANGELOG.md). Tagged releases
+publish the versioned `.difypkg` as a GitHub Release asset. The Dify Marketplace
+update and one-file PR process is documented in
+[docs/marketplace/README.md](./docs/marketplace/README.md).
+
 References:
 
 - Open-Meteo Geocoding API: https://open-meteo.com/en/docs/geocoding-api

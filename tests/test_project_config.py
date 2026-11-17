@@ -35,6 +35,16 @@ def test_release_versions_are_synchronized():
     assert user_agent_version.group(1) == project_version
 
 
+def test_changelog_starts_with_the_current_release():
+    with (ROOT / "pyproject.toml").open("rb") as handle:
+        project_version = tomllib.load(handle)["project"]["version"]
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    headings = re.findall(r"^## ([0-9]+\.[0-9]+\.[0-9]+)", changelog, re.MULTILINE)
+
+    assert headings
+    assert headings[0] == project_version
+
+
 def test_runtime_requirements_are_fully_pinned():
     requirement_lines = [
         line.strip()

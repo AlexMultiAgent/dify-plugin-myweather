@@ -55,6 +55,7 @@ FORBIDDEN_FILES = frozenset(
         ".env",
         ".env.example",
         ".gitignore",
+        "CHANGELOG.md",
         "MARKETPLACE_CHECKLIST.md",
         "uv.lock",
     }

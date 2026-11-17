@@ -183,6 +183,12 @@ uv run python scripts/verify_package.py ../myweather-ci.difypkg --source-root .
 插件自身不会记录原始地点文本，包括 debug 日志。
 包验证脚本会拒绝开发文件，并要求所有运行文件与源码逐字节一致。
 
+## 发布流程
+
+版本说明维护在 [CHANGELOG.md](../CHANGELOG.md)。推送版本标签后，CI 会创建
+GitHub Release 并附带对应的 `.difypkg`。Dify 市场更新以及“仅包含一个新包文件”的
+PR 流程见 [docs/marketplace/README.md](../docs/marketplace/README.md)。
+
 参考：
 
 - Open-Meteo 地理编码接口：https://open-meteo.com/en/docs/geocoding-api
