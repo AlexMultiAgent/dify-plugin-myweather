@@ -1,8 +1,11 @@
 .git
+.github
 .gitignore
 .difyignore
 .claude
 .claude.local.md
+.codex
+.superpowers
 .remember
 .playwright-mcp
 .venv

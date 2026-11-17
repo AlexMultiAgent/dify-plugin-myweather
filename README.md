@@ -56,6 +56,7 @@ Only the place name the user typed is sent; see [PRIVACY.md](./PRIVACY.md).
 ## Tool Parameters
 
 - `location` (required): city, region, airport code, or place name. Supports English, Chinese, Japanese, and Korean.
+- `location` is limited to 200 characters to keep upstream requests and logs bounded.
 - `language` (optional): output language. `auto` (default) detects from input — Hangul → Korean, hiragana/katakana → Japanese, recognized Taiwan / Hong Kong / Macau / Japan place names → their regional language, other CJK → Simplified Chinese, otherwise English. Set it explicitly for ambiguous Han-only names. Supported explicit values are `en-US`, `zh-Hans`, `zh-Hant`, `ja`, and `ko`.
 - `units` (optional): `metric` or `uscs`.
 - `source_preference` (optional): `open-meteo` (default) or `wttr`.
@@ -79,6 +80,10 @@ Returned by `weather_lookup`:
 - `summary`: concise weather sentence without inline source text (localized).
 - `open_meteo_compliance_notice`: Open-Meteo attribution plus modification declaration (only when source is Open-Meteo).
 - `rate_limit_notice`: fallback notice (only when Open-Meteo fails, including HTTP 429, and fallback is triggered).
+
+The default text message appends `source_display` and, when applicable,
+`open_meteo_compliance_notice`, so workflows that only consume the text message
+still show the actual provider and required attribution.
 
 ## Language Support
 
@@ -154,6 +159,26 @@ wttr.in:
 - Resolves Latin-script and Chinese place names, but maps Japanese and Korean names to a
   nearby feature instead of the city, so it is not used for native-script Japanese or Korean.
 - Can provide localized weather descriptions.
+- A wttr.in result is rejected when its country conflicts with a recognized
+  regional hint, or when a Han-only query that defaults to Simplified Chinese is
+  matched to Hong Kong, Macau, or Taiwan. The plugin then tries the next
+  candidate or reports failure rather than silently returning the wrong city.
+
+## Development Checks
+
+Runtime dependencies in `requirements.txt` are exported from `uv.lock` with exact
+versions. CI runs the same checks on every push and pull request:
+
+```bash
+uv sync --locked --group dev
+uv run pytest -q
+uv run ruff check .
+uv run ruff format --check .
+uv run pyright
+uv run pip-audit --no-deps --disable-pip -r requirements.txt
+```
+
+The plugin itself does not log raw location text, including at debug level.
 
 References:
 

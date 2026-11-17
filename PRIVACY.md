@@ -30,6 +30,9 @@ Please review upstream privacy policies and terms before production use:
 ## 4. Storage and Retention
 
 The plugin itself does not implement persistent storage for user queries or weather responses.
+Its own log statements avoid raw location text, including debug-level request
+diagnostics. The hosting platform may still log invocation metadata according
+to its own configuration.
 
 Data retention, logs, and access controls are handled by:
 

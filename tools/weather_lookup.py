@@ -85,6 +85,18 @@ def _empty_result(lang: str, loc: str, error_text: str) -> dict[str, Any]:
     }
 
 
+def _display_text(weather: dict[str, Any]) -> str:
+    return "\n".join(
+        part
+        for part in (
+            str(weather.get("summary") or "").strip(),
+            str(weather.get("source_display") or "").strip(),
+            str(weather.get("open_meteo_compliance_notice") or "").strip(),
+        )
+        if part
+    )
+
+
 class WeatherLookupTool(Tool):
     def _invoke(
         self, tool_parameters: dict[str, Any]
@@ -133,4 +145,4 @@ class WeatherLookupTool(Tool):
             payload["raw"] = weather.get("raw")
         yield self.create_json_message(payload)
 
-        yield self.create_text_message(weather["summary"])
+        yield self.create_text_message(_display_text(weather))

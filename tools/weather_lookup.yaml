@@ -28,12 +28,12 @@ parameters:
     ja_JP: 場所
     ko_KR: 장소
   human_description:
-    en_US: City, region, airport code, or place name. For overseas cities, include country/region when possible.
-    zh_Hans: 城市、地区、机场代码或地名。查询海外城市时建议附带国家/地区。
-    zh_Hant: 城市、地區、機場代碼或地名。查詢海外城市時建議附帶國家/地區。
-    ja_JP: 都市、地域、空港コード、または地名。海外の都市の場合、国/地域を含めてください。
-    ko_KR: 도시, 지역, 공항 코드 또는 장소명. 해외 도시의 경우 가능하면 국가/지역을 포함하세요.
-  llm_description: "Extract only the place name from user input (for example: Shanghai, London, JFK, 深圳, 東京). Do not include extra words like weather, forecast, now, today, 天气, 天気."
+    en_US: City, region, airport code, or place name, up to 200 characters. For overseas cities, include country/region when possible.
+    zh_Hans: 城市、地区、机场代码或地名，最多 200 个字符。查询海外城市时建议附带国家/地区。
+    zh_Hant: 城市、地區、機場代碼或地名，最多 200 個字元。查詢海外城市時建議附帶國家/地區。
+    ja_JP: 都市、地域、空港コード、または地名。最大200文字。海外の都市の場合、国/地域を含めてください。
+    ko_KR: 도시, 지역, 공항 코드 또는 장소명이며 최대 200자입니다. 해외 도시의 경우 가능하면 국가/지역을 포함하세요.
+  llm_description: "Extract only the place name from user input (for example: Shanghai, London, JFK, 深圳, 東京), with at most 200 characters. Do not include extra words like weather, forecast, now, today, 天气, 天気."
 - name: language
   type: select
   required: false

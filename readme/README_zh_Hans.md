@@ -55,6 +55,7 @@ Seoul, South Korea: 구름많음. 기온 12.6°C, 체감 10.1°C, 습도 61%, �
 ## 工具参数
 
 - `location`（必填）：城市、地区、机场代码或地名，支持英文、中文、日文、韩文。
+- `location` 最多 200 个字符，以限制上游请求和日志的数据量。
 - `language`（可选）：输出语言。`auto`（默认）按输入自动判断——谚文 → 韩文、平假名/片假名 → 日文、可识别的台湾 / 香港 / 澳门 / 日本地名 → 对应地区语言、其他 CJK → 简体中文，其余 → 英文。纯汉字地名有歧义时请显式指定。可选值为 `en-US`、`zh-Hans`、`zh-Hant`、`ja`、`ko`。
 - `units`（可选）：`metric` 或 `uscs`。
 - `source_preference`（可选）：`open-meteo`（默认）或 `wttr`。
@@ -78,6 +79,9 @@ Seoul, South Korea: 구름많음. 기온 12.6°C, 체감 10.1°C, 습도 61%, �
 - `summary`：不含数据源信息的简短天气描述（已本地化）。
 - `open_meteo_compliance_notice`：Open-Meteo 署名与改动声明（仅当数据源为 Open-Meteo）。
 - `rate_limit_notice`：兜底提示（仅当 Open-Meteo 请求失败，包括 HTTP 429，并触发兜底）。
+
+默认文本消息会追加 `source_display`，并在适用时追加
+`open_meteo_compliance_notice`；因此只消费文本消息的工作流也能显示实际数据源和署名。
 
 ## 语言支持
 
@@ -149,6 +153,24 @@ wttr.in：
 - 能解析拉丁字母与中文地名，但会把日文、韩文地名映射到邻近地点而非目标城市，
   因此不用于日文、韩文原文字段名。
 - 可提供本地化的天气描述。
+- 当 wttr.in 返回的国家/地区与可识别提示冲突，或默认简体中文的纯汉字查询被匹配到
+  香港、澳门、台湾时，插件会拒绝该结果并尝试下一个候选；不会把错误城市当作成功结果。
+
+## 开发检查
+
+`requirements.txt` 从 `uv.lock` 导出并锁定全部运行时依赖的精确版本。每次推送和
+拉取请求都会在 CI 中执行：
+
+```bash
+uv sync --locked --group dev
+uv run pytest -q
+uv run ruff check .
+uv run ruff format --check .
+uv run pyright
+uv run pip-audit --no-deps --disable-pip -r requirements.txt
+```
+
+插件自身不会记录原始地点文本，包括 debug 日志。
 
 参考：
 

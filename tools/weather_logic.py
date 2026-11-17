@@ -4,7 +4,7 @@ import logging
 import re
 import time
 from typing import Any
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 import requests
 
@@ -36,8 +36,9 @@ OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 DEFAULT_TIMEOUT = 12
 TOTAL_LOOKUP_TIMEOUT = 90
 MAX_LOCATION_CANDIDATES = 4
+MAX_LOCATION_LENGTH = 200
 # When updating the plugin version, also update manifest.yaml and pyproject.toml.
-USER_AGENT = "dify-myweather-plugin/0.1.3"
+USER_AGENT = "dify-myweather-plugin/0.1.4"
 
 LANGUAGE_VALUES = frozenset({"auto", "en-US", "zh-Hans", "zh-Hant", "ja", "ko"})
 
@@ -327,12 +328,19 @@ def _retry_request(
 ) -> requests.Response:
     """Issue an HTTP request with retries for transient network errors."""
     last_exc: Exception | None = None
+    request_host = urlparse(url).hostname or "unknown-host"
     for attempt in range(_RETRY_MAX + 1):
         try:
             request_kwargs = dict(kwargs)
+            request_kwargs["allow_redirects"] = False
             if deadline is not None:
                 request_kwargs["timeout"] = _request_timeout(deadline)
             response = session.request(method, url, **request_kwargs)
+            status = getattr(response, "status_code", None)
+            if isinstance(status, int) and 300 <= status < 400:
+                raise requests.HTTPError(
+                    f"Upstream redirect rejected with HTTP {status}.", response=response
+                )
             response.raise_for_status()
             return response
         except (requests.ConnectionError, requests.Timeout) as exc:
@@ -340,13 +348,12 @@ def _retry_request(
             if attempt < _RETRY_MAX:
                 delay = _RETRY_BACKOFF * (2**attempt)
                 logger.debug(
-                    "Retry %d/%d for %s %s after %.1fs: %s",
+                    "Retry %d/%d for %s request to %s after %.1fs",
                     attempt + 1,
                     _RETRY_MAX,
                     method,
-                    url,
+                    request_host,
                     delay,
-                    exc,
                 )
                 _wait_before_retry(delay, deadline)
         except requests.HTTPError as exc:
@@ -355,11 +362,11 @@ def _retry_request(
                 last_exc = exc
                 delay = _RETRY_BACKOFF * (2**attempt)
                 logger.debug(
-                    "Retry %d/%d for %s %s after %.1fs: HTTP %s",
+                    "Retry %d/%d for %s request to %s after %.1fs: HTTP %s",
                     attempt + 1,
                     _RETRY_MAX,
                     method,
-                    url,
+                    request_host,
                     delay,
                     status,
                 )
@@ -432,6 +439,11 @@ def _kmh_to_mph(value_kmh: float | None) -> float | None:
     if value_kmh is None:
         return None
     return value_kmh * 0.621371
+
+
+def _require_temperature(source: str, temperature_c: float | None) -> None:
+    if temperature_c is None:
+        raise WeatherLookupError(f"{source} response is missing temperature data.")
 
 
 def _clean_join(parts: list[str | None]) -> str:
@@ -696,6 +708,57 @@ def _infer_country_hints(location: str) -> list[str]:
         return ["KR"]
 
     return []
+
+
+_COUNTRY_NAME_CODES = {
+    "hong kong": "HK",
+    "japan": "JP",
+    "macao": "MO",
+    "macau": "MO",
+    "south korea": "KR",
+    "taiwan": "TW",
+    "united kingdom": "GB",
+    "united states": "US",
+    # Keep the generic parent country last so more specific equal-length names
+    # such as Macau win when wttr.in returns "Macau SAR, China".
+    "china": "CN",
+}
+
+
+def _country_code_for_name(country_name: Any) -> str | None:
+    normalized = re.sub(r"\s+", " ", str(country_name or "").strip().lower())
+    for name, code in sorted(
+        _COUNTRY_NAME_CODES.items(), key=lambda item: len(item[0]), reverse=True
+    ):
+        if name in normalized:
+            return code
+    return None
+
+
+def _validate_wttr_match(query: str, country_name: Any) -> None:
+    country_code = _country_code_for_name(country_name)
+    if country_code is None:
+        return
+
+    hints = _infer_country_hints(query)
+    if hints and country_code not in hints:
+        raise WeatherLookupError(
+            f"wttr.in matched {country_name}, outside expected region {hints[0]}."
+        )
+
+    # A Han-only query defaults to Simplified Chinese. wttr.in has mapped
+    # mainland names such as 深圳 to nearby Hong Kong locations, so reject
+    # cross-border matches instead of returning weather for the wrong city.
+    if (
+        not hints
+        and has_kanji(query)
+        and not has_kana(query)
+        and not has_hangul(query)
+        and country_code in {"HK", "MO", "TW"}
+    ):
+        raise WeatherLookupError(
+            f"wttr.in matched {country_name}, inconsistent with the Han-only query."
+        )
 
 
 def _build_open_meteo_geocode_params(
@@ -974,6 +1037,7 @@ def _fetch_from_wttr(
     region_name = ((nearest.get("region") or [{}])[0]).get("value")
     country_name = ((nearest.get("country") or [{}])[0]).get("value")
     resolved_location = _clean_join([area_name, region_name, country_name]) or location
+    _validate_wttr_match(location, country_name)
 
     condition = (
         ((current.get("weatherDesc") or [{}])[0]).get("value") or "Unknown"
@@ -994,10 +1058,13 @@ def _fetch_from_wttr(
     if feels_f is None and feels_c is not None:
         feels_f = _c_to_f(feels_c)
 
+    _require_temperature("wttr", temp_c)
+
     return {
         "source": "wttr",
         "query_location": location,
         "location": resolved_location,
+        "country": country_name,
         "condition": condition,
         "temperature_c": temp_c,
         "temperature_f": temp_f,
@@ -1033,8 +1100,7 @@ def _fetch_from_open_meteo(
 
     for geocode_params in _build_open_meteo_geocode_params(location, request_language):
         logger.debug(
-            "Open-Meteo geocoding attempt: location=%s language=%s countryCode=%s",
-            location,
+            "Open-Meteo geocoding attempt: language=%s countryCode=%s",
             geocode_params.get("language"),
             geocode_params.get("countryCode", "*"),
         )
@@ -1052,8 +1118,7 @@ def _fetch_from_open_meteo(
         candidates = payload.get("results") or []
         if not candidates:
             logger.debug(
-                "Open-Meteo geocoding no-match: location=%s language=%s countryCode=%s",
-                location,
+                "Open-Meteo geocoding no-match: language=%s countryCode=%s",
                 geocode_params.get("language"),
                 geocode_params.get("countryCode", "*"),
             )
@@ -1129,6 +1194,8 @@ def _fetch_from_open_meteo(
         if weather_code is not None
         else "Unknown"
     )
+
+    _require_temperature("Open-Meteo", temp_c)
 
     return {
         "source": "open-meteo",
@@ -1351,6 +1418,10 @@ def get_weather(
     location = location.strip()
     if not location:
         raise WeatherLookupError("Location is required.")
+    if len(location) > MAX_LOCATION_LENGTH:
+        raise WeatherLookupError(
+            f"Location is too long. Use at most {MAX_LOCATION_LENGTH} characters."
+        )
 
     if units not in {"metric", "uscs"}:
         raise WeatherLookupError(
@@ -1429,17 +1500,15 @@ def get_weather(
                         source,
                         type(exc).__name__,
                     )
-                    logger.debug(
-                        "Weather fetch failure detail: source=%s candidate=%s error=%s",
-                        source,
-                        candidate,
-                        exc,
-                    )
                     if source == "open-meteo":
                         open_meteo_failed = True
                         if _is_open_meteo_rate_limited(exc):
                             open_meteo_rate_limited = True
                     errors[f"{source}({candidate})"] = str(exc)
+                    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+                        # A connection or read timeout is provider-wide; trying
+                        # more candidate spellings only multiplies the outage delay.
+                        break
                     continue
 
                 # Formatting runs outside the source-fallback scope: a failure here is a

@@ -568,6 +568,11 @@ def test_get_weather_empty_location():
         get_weather("")
 
 
+def test_get_weather_rejects_excessive_location_length():
+    with pytest.raises(WeatherLookupError, match="too long"):
+        get_weather("L" * 201, session=Mock(spec=requests.Session))
+
+
 def test_get_weather_invalid_units():
     with pytest.raises(WeatherLookupError, match="units"):
         get_weather("London", units="kelvin")
@@ -585,6 +590,7 @@ def test_get_weather_invalid_source():
 
 def _mock_wttr_response(
     location="London",
+    country="Test Country",
     temp_c="22.0",
     temp_f="72.0",
     feels_c="20.0",
@@ -609,7 +615,7 @@ def _mock_wttr_response(
             {
                 "areaName": [{"value": location}],
                 "region": [{"value": "Test Region"}],
-                "country": [{"value": "Test Country"}],
+                "country": [{"value": country}],
             }
         ],
     }
@@ -702,6 +708,35 @@ def test_retry_request_does_not_retry_http_error():
     with pytest.raises(requests.HTTPError):
         _retry_request("GET", "http://example.com", session)
     assert session.request.call_count == 1
+
+
+def test_retry_request_rejects_redirects():
+    session = Mock(spec=requests.Session)
+    mock_response = Mock(spec=requests.Response)
+    mock_response.status_code = 302
+    mock_response.raise_for_status.return_value = None
+    session.request.return_value = mock_response
+
+    with pytest.raises(requests.HTTPError, match="redirect"):
+        _retry_request("GET", "https://example.com", session)
+
+    assert session.request.call_args.kwargs["allow_redirects"] is False
+
+
+def test_retry_debug_logging_does_not_include_transport_error_url(caplog, monkeypatch):
+    session = Mock(spec=requests.Session)
+    session.request.side_effect = requests.ConnectionError(
+        "failed https://wttr.in/Sensitive+Place+Name"
+    )
+    monkeypatch.setattr("tools.weather_logic.time.sleep", lambda _delay: None)
+
+    with (
+        caplog.at_level(logging.DEBUG, logger="tools.weather_logic"),
+        pytest.raises(requests.ConnectionError),
+    ):
+        _retry_request("GET", "https://wttr.in/Sensitive+Place+Name", session)
+
+    assert "Sensitive+Place" not in caplog.text
 
 
 def test_retry_request_retries_on_429():
@@ -808,17 +843,42 @@ def test_fetch_from_wttr_parses_response():
     assert result["location"] == "London, Test Region, Test Country"
 
 
-def test_fetch_from_wttr_handles_missing_fields():
+def test_fetch_from_wttr_rejects_cross_region_match_for_han_query():
+    session = Mock(spec=requests.Session)
+    mock_resp = Mock(spec=requests.Response)
+    mock_resp.json.return_value = _mock_wttr_response(
+        location="Ma Tso Lung", country="Hong Kong SAR"
+    )
+    mock_resp.raise_for_status.return_value = None
+    session.request.return_value = mock_resp
+
+    with pytest.raises(WeatherLookupError, match="matched Hong Kong"):
+        _fetch_from_wttr("深圳", session)
+
+
+def test_fetch_from_wttr_accepts_expected_macau_region():
+    session = Mock(spec=requests.Session)
+    mock_resp = Mock(spec=requests.Response)
+    mock_resp.json.return_value = _mock_wttr_response(
+        location="Macau", country="Macau SAR, China"
+    )
+    mock_resp.raise_for_status.return_value = None
+    session.request.return_value = mock_resp
+
+    result = _fetch_from_wttr("澳门", session)
+
+    assert result["location"].startswith("Macau")
+
+
+def test_fetch_from_wttr_rejects_empty_weather_payload():
     session = Mock(spec=requests.Session)
     mock_resp = Mock(spec=requests.Response)
     mock_resp.json.return_value = {"current_condition": [], "nearest_area": []}
     mock_resp.raise_for_status.return_value = None
     session.request.return_value = mock_resp
 
-    result = _fetch_from_wttr("Nowhere", session)
-    assert result["temperature_c"] is None
-    assert result["humidity"] is None
-    assert result["condition"] == "Unknown"
+    with pytest.raises(WeatherLookupError, match="temperature"):
+        _fetch_from_wttr("Nowhere", session)
 
 
 # ---------------------------------------------------------------------------
@@ -852,6 +912,22 @@ def test_fetch_from_open_meteo_parses_response():
     assert result["humidity"] == 68
     assert result["wind_speed_kmh"] == 12.3
     assert result["condition"] == "Mainly clear"
+
+
+def test_fetch_from_open_meteo_rejects_empty_current_payload():
+    session = Mock(spec=requests.Session)
+    geo_resp = Mock(spec=requests.Response)
+    geo_resp.json.return_value = _mock_open_meteo_geocode_response("London", "GB")
+    geo_resp.raise_for_status.return_value = None
+
+    forecast_resp = Mock(spec=requests.Response)
+    forecast_resp.json.return_value = {"current": {}}
+    forecast_resp.raise_for_status.return_value = None
+
+    session.request.side_effect = [geo_resp, forecast_resp]
+
+    with pytest.raises(WeatherLookupError, match="temperature"):
+        _fetch_from_open_meteo("London", session, language="en-US")
 
 
 # ---------------------------------------------------------------------------
@@ -1045,6 +1121,29 @@ def test_get_weather_does_not_start_fallback_after_deadline(monkeypatch):
     assert calls == ["open-meteo"]
 
 
+def test_get_weather_stops_open_meteo_after_network_failure(monkeypatch):
+    open_meteo_calls: list[str] = []
+
+    def timeout(candidate, *_args, **_kwargs):
+        open_meteo_calls.append(candidate)
+        raise requests.ReadTimeout("provider timed out")
+
+    def fail_wttr(*_args, **_kwargs):
+        raise WeatherLookupError("wttr unavailable")
+
+    monkeypatch.setattr("tools.weather_logic._fetch_from_open_meteo", timeout)
+    monkeypatch.setattr("tools.weather_logic._fetch_from_wttr", fail_wttr)
+
+    with pytest.raises(WeatherLookupError, match="All weather sources failed"):
+        get_weather(
+            "a和b和c和d和e和f",
+            preferred_source="open-meteo",
+            language="zh-Hans",
+        )
+
+    assert len(open_meteo_calls) == 1
+
+
 def test_get_weather_propagates_language_to_output():
     session = _build_mock_session()
     result = get_weather(
@@ -1141,6 +1240,28 @@ def test_fetch_logging_does_not_include_raw_query(caplog):
     assert "Sensitive Place Name" not in caplog.text
 
 
+def test_failure_debug_logging_does_not_include_raw_query(caplog):
+    session = Mock(spec=requests.Session)
+    session.request.side_effect = requests.HTTPError(
+        "400 for https://wttr.in/Sensitive+Place+Name"
+    )
+
+    with (
+        caplog.at_level(logging.DEBUG, logger="tools.weather_logic"),
+        pytest.raises(WeatherLookupError, match="All weather sources failed"),
+    ):
+        get_weather(
+            "Sensitive Place Name",
+            preferred_source="wttr",
+            language="en-US",
+            session=session,
+        )
+
+    assert "Sensitive Place Name" not in caplog.text
+    assert "Sensitive%20Place" not in caplog.text
+    assert "Sensitive+Place" not in caplog.text
+
+
 def test_get_weather_wttr_malformed_payload_falls_back_to_open_meteo():
     session = Mock(spec=requests.Session)
 
@@ -1224,9 +1345,9 @@ def _wttr_request_stub(self, method, url, **kwargs):
     return resp
 
 
-def _invoke_tool(tool_parameters):
+def _invoke_tool(tool_parameters, request_stub=None):
     tool = WeatherLookupTool.from_credentials({})
-    with patch.object(requests.Session, "request", _wttr_request_stub):
+    with patch.object(requests.Session, "request", request_stub or _wttr_request_stub):
         return list(tool.invoke(tool_parameters))
 
 
@@ -1235,6 +1356,13 @@ def _json_payload(messages: list[Any]) -> dict[str, Any]:
         if message.type.name == "JSON":
             return cast(dict[str, Any], message.message.json_object)
     raise AssertionError("no JSON message emitted")
+
+
+def _text_output(messages: list[Any]) -> str:
+    for message in messages:
+        if message.type.name == "TEXT":
+            return cast(str, message.message.text)
+    raise AssertionError("no text message emitted")
 
 
 def test_json_payload_matches_output_schema():
@@ -1248,6 +1376,33 @@ def test_include_raw_json_emits_only_declared_keys():
     )
     assert set(payload.keys()) == set(_OUTPUT_FIELDS) | {"raw"}
     assert "current_condition" in payload["raw"]
+
+
+def test_tool_text_includes_actual_source():
+    text = _text_output(_invoke_tool({"location": "London"}))
+
+    assert "Source: wttr.in." in text
+
+
+def test_tool_text_includes_open_meteo_attribution():
+    def request_stub(self, method, url, **kwargs):
+        resp = Mock(spec=requests.Response)
+        resp.raise_for_status.return_value = None
+        resp.status_code = 200
+        if "geocoding" in url:
+            resp.json.return_value = _mock_open_meteo_geocode_response()
+        else:
+            resp.json.return_value = _mock_open_meteo_forecast_response()
+        return resp
+
+    text = _text_output(
+        _invoke_tool(
+            {"location": "London", "source_preference": "open-meteo"},
+            request_stub=request_stub,
+        )
+    )
+
+    assert "Open-Meteo attribution" in text
 
 
 def test_tool_emits_every_declared_variable():
@@ -1330,7 +1485,12 @@ def test_get_weather_uses_open_meteo_for_hangul_even_when_wttr_is_preferred():
         if "wttr.in" in url:
             raise AssertionError("wttr.in must not be queried for Hangul input")
         resp = Mock(spec=requests.Response)
-        resp.json.return_value = _mock_open_meteo_geocode_response("서울특별시", "KR")
+        if "geocoding" in url:
+            resp.json.return_value = _mock_open_meteo_geocode_response(
+                "서울특별시", "KR"
+            )
+        else:
+            resp.json.return_value = _mock_open_meteo_forecast_response()
         resp.raise_for_status.return_value = None
         return resp
 
@@ -1348,7 +1508,10 @@ def test_get_weather_uses_open_meteo_for_kana_even_when_wttr_is_preferred():
         if "wttr.in" in url:
             raise AssertionError("wttr.in must not be queried for kana input")
         resp = Mock(spec=requests.Response)
-        resp.json.return_value = _mock_open_meteo_geocode_response("東京都", "JP")
+        if "geocoding" in url:
+            resp.json.return_value = _mock_open_meteo_geocode_response("東京都", "JP")
+        else:
+            resp.json.return_value = _mock_open_meteo_forecast_response()
         resp.raise_for_status.return_value = None
         return resp
 
@@ -1367,7 +1530,10 @@ def test_get_weather_uses_open_meteo_for_japanese_han_when_wttr_is_preferred():
         if "wttr.in" in url:
             raise AssertionError("wttr.in must not be queried for Japanese Han input")
         resp = Mock(spec=requests.Response)
-        resp.json.return_value = _mock_open_meteo_geocode_response("岐阜市", "JP")
+        if "geocoding" in url:
+            resp.json.return_value = _mock_open_meteo_geocode_response("岐阜市", "JP")
+        else:
+            resp.json.return_value = _mock_open_meteo_forecast_response()
         resp.raise_for_status.return_value = None
         return resp
 

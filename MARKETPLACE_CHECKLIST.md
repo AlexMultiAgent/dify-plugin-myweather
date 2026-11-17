@@ -7,6 +7,7 @@ Check each item before submitting to the Dify Marketplace.
 - [ ] Before choosing a version, check the latest official package under
   `langgenius/dify-plugins/AlexMultiAgent/myweather` and increment from that
   published version. Local, unpublished `.difypkg` versions are not release baselines.
+  The current published baseline for this release is `0.1.3`.
 - [ ] `manifest.yaml` version matches the packaged `.difypkg` version AND the `USER_AGENT` string in `tools/weather_logic.py`
 - [ ] `author` field is consistent across `manifest.yaml`, `provider/myweather.yaml`, and `tools/weather_lookup.yaml`
 - [ ] `created_at` reflects the initial publish date (`2026-04-08T00:00:00Z`)
@@ -14,6 +15,7 @@ Check each item before submitting to the Dify Marketplace.
 - [ ] `privacy` points to `./PRIVACY.md`
 - [ ] `tags` are valid Dify enum values (`weather`)
 - [ ] `meta.runner.language` is `python` and `version` matches the tested runtime (`3.12`)
+- [ ] `resource.memory` is at least `268435456` bytes (256 MiB)
 - [ ] `repo` is the source repository on an allowed host (github.com, gitlab.com, …)
 - [ ] `contact` is a reachable address — the Marketplace requires it, so use the
       GitHub noreply address rather than a personal mailbox
@@ -55,15 +57,15 @@ input directory, so the output path is given explicitly:
 
 ```bash
 cd ..
-dify plugin package dify-plugin-myweather -o myweather-0.1.3.difypkg
+dify plugin package dify-plugin-myweather -o myweather-0.1.4.difypkg
 ```
 
 `.difyignore` is the only filter — `.gitignore` is ignored — so it has to name
-`.env`, `.playwright-mcp/`, `tests/`, `docs/`, `__pycache__/` and the built
+`.env`, `.github/`, `.playwright-mcp/`, `tests/`, `docs/`, `__pycache__/` and the built
 package itself. Check the contents of the result before submitting it:
 
 ```bash
-python -c "import zipfile;print(sorted(zipfile.ZipFile('myweather-0.1.3.difypkg').namelist()))"
+python -c "import zipfile;print(sorted(zipfile.ZipFile('myweather-0.1.4.difypkg').namelist()))"
 ```
 
 - [ ] Packaging command succeeds without errors
@@ -74,17 +76,20 @@ python -c "import zipfile;print(sorted(zipfile.ZipFile('myweather-0.1.3.difypkg'
 ## Static Analysis & Dependencies
 
 ```bash
-uv sync --group dev
+uv lock --check
+uv sync --locked --group dev
 ruff check .
 ruff format --check .
 pyright --project pyproject.toml
-pip-audit -r requirements.txt
+pip-audit --no-deps --disable-pip -r requirements.txt
 ```
 
+- [ ] `requirements.txt` is the exact runtime export from `uv.lock`
 - [ ] `ruff check .` passes with the rule set pinned in `pyproject.toml`
 - [ ] `ruff format --check .` reports every file already formatted
 - [ ] `pyright --project pyproject.toml` reports zero errors
-- [ ] `pip-audit -r requirements.txt` reports no known vulnerabilities
+- [ ] `pip-audit --no-deps --disable-pip -r requirements.txt` reports no known vulnerabilities
+- [ ] `.github/workflows/ci.yml` passes on the release commit
 
 ## Functional
 
@@ -92,11 +97,14 @@ pip-audit -r requirements.txt
 - [ ] `wttr` primary source works for English and Chinese locations
 - [ ] Fallback triggers correctly when the primary source fails
 - [ ] Fallback triggers when Open-Meteo geocoding returns no match and `rate_limit_notice` is set
+- [ ] A semantically empty weather payload falls back instead of returning an all-null success
+- [ ] A wttr.in result with a conflicting country/region is rejected
 - [ ] Language auto-detection works for Korean (Hangul), Japanese (kana), Chinese (CJK)
 - [ ] Taiwan / Hong Kong / Macau place names resolve to Traditional Chinese
 - [ ] Explicit language selection overrides auto-detection
 - [ ] `uscs` unit selection shows Fahrenheit and mph
 - [ ] `include_raw_json` adds a `raw` key and no keys absent from `output_schema`
+- [ ] The default text output includes the actual source and attribution when applicable
 - [ ] A malformed upstream payload falls back to the other provider instead of raising
 - [ ] The lookup gives up on the second provider once the lookup deadline is reached
 - [ ] At most four location candidates are queried per provider
