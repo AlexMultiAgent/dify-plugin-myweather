@@ -79,12 +79,20 @@ jobs:
       - name: Extract release notes
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          awk -v heading="## ${version}" '
-            $0 == heading { found = 1; next }
-            found && /^## [0-9]+\.[0-9]+\.[0-9]+/ { exit }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          start = changelog.index(f"## {version}")
+          end = changelog.find("\n## ", start + 1)
+          section = changelog[start:end if end != -1 else None]
+          notes = section.split("\n", 1)[1].strip()
+          if not notes:
+              raise SystemExit("release notes section is empty")
+          Path("release-notes.md").write_text(notes + "\n", encoding="utf-8")
+          PY
           test -s release-notes.md
       - name: Publish GitHub release
         env:
