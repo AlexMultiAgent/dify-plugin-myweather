@@ -64,9 +64,10 @@ pip-audit: no known vulnerabilities
 package verification: 19 runtime entries verified
 ```
 
-Live upstream smoke tests after the fix resolved `连江县`, `高松`, `松山`, `金沢`
-and `今治市` to their intended Chinese or Japanese cities. The package was also
-downloaded from the GitHub Release and re-verified against the tagged source tree.
+Live upstream smoke tests after the fix resolved an ambiguous mainland Chinese county
+and four Japanese Han-only city names to their intended locations. The package was
+also downloaded from the GitHub Release and re-verified against the tagged source
+tree.
 
 ## Reviewer notes
 

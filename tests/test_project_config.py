@@ -45,6 +45,18 @@ def test_changelog_starts_with_the_current_release():
     assert headings[0] == project_version
 
 
+def test_primary_readme_is_english_only():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    localized_characters = re.findall(
+        r"[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]", readme
+    )
+
+    assert not localized_characters, (
+        "README.md must remain English; move localized examples to "
+        "readme/README_zh_Hans.md"
+    )
+
+
 def test_runtime_requirements_are_fully_pinned():
     requirement_lines = [
         line.strip()

@@ -15,17 +15,8 @@ MyWeather is a Dify weather plugin that requires no API key.
 
 > London, England, United Kingdom: Partly cloudy. Temp 12.0 °C, feels like 10.5 °C, humidity 72%, wind 11.0 km/h.
 
-**Korean** (input: the Hangul name of Seoul)
-
-```text
-Seoul, South Korea: 구름많음. 기온 12.6°C, 체감 10.1°C, 습도 61%, 풍속 7.0 km/h.
-```
-
-**Japanese** (input: the kanji name of Yokohama)
-
-```text
-横浜市, 神奈川県, 日本：曇り。気温 15.5°C、体感 12.5°C、湿度 51%、風速 9.0 km/h。
-```
+Localized Korean, Japanese, Simplified Chinese, and Traditional Chinese examples
+are in [readme/README_zh_Hans.md](./readme/README_zh_Hans.md).
 
 Workflow: `Start (city) → Weather Lookup → Output`
 
@@ -117,24 +108,24 @@ regional variants:
 
 | Input script | Query candidates | How |
 | --- | --- | --- |
-| Hangul | `seoul`, `busan`, plus the native name | Revised Romanization; the administrative suffix (`수원시` → `suwon`) is dropped |
+| Hangul input | Romanized and native forms | Revised Romanization; the administrative suffix is dropped |
 | Kana | `tokyo`, `sapporo`, plus the native name | Hepburn |
-| Japanese kanji | Native name, bare city name, and bounded `市`/`都` variants | Explicit `language=ja` requests Japanese names with Japan-first filtering |
+| Japanese kanji | Native name, bare city name, and bounded city/prefecture variants | Explicit `language=ja` requests Japanese names with Japan-first filtering |
 | Chinese | Native name | Use the native name, with bounded regional aliases when needed |
 | Taiwan / Hong Kong / Macau | `Taipei`, `Hong Kong`, plus native aliases | The Latin alias is preferred when regional context is recognized |
 
 Worked examples:
 
 ```text
-서울      -> seoul
-부산      -> busan
-수원시    -> suwon
-とうきょう -> tokyo
-さっぽろ  -> sapporo
-横浜      -> 横浜市, 横浜都
-今治市    -> 今治, 今治市
-北京      -> (native, no transliteration needed)
-台北      -> Taipei
+seoul      -> seoul
+busan      -> busan
+suwon      -> suwon
+tokyo      -> tokyo
+sapporo    -> sapporo
+yokohama   -> Yokohama-shi, Yokohama-to
+imabarishi -> Imabari, Imabarishi
+beijing    -> native pass-through
+taipei     -> Taipei
 ```
 
 Both romanizers are deterministic — Unicode syllable decomposition for Hangul, a fixed
