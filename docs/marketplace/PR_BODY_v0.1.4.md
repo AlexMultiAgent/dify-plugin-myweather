@@ -70,8 +70,14 @@ This is a version-update PR and contains only:
 AlexMultiAgent/myweather/myweather-0.1.4.difypkg
 ```
 
+Release asset:
+
+```text
+https://github.com/AlexMultiAgent/dify-plugin-myweather/releases/download/v0.1.4/myweather-0.1.4.difypkg
+```
+
 Package SHA-256:
 
 ```text
-fbe203d107aad3b8d12431420b697759ff3e35fc3721ca1b5325e1537858a69f
+6e3ed8aa1c6aae518e6f7af42a24ee78dde8ad53581404c240a4d4ef4f57cef9
 ```
