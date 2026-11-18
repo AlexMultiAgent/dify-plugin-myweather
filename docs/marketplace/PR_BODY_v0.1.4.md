@@ -56,7 +56,7 @@ the plugin. Routine plugin logs omit raw location text.
 ## Local validation
 
 ```text
-pytest: 254 passed
+pytest: 255 passed
 ruff check: passed
 ruff format --check: 22 files already formatted
 pyright: 0 errors, 0 warnings
@@ -86,7 +86,7 @@ https://github.com/AlexMultiAgent/dify-plugin-myweather/releases/download/v0.1.4
 Package SHA-256:
 
 ```text
-6e3ed8aa1c6aae518e6f7af42a24ee78dde8ad53581404c240a4d4ef4f57cef9
+11335bcee3210fe535e51f481ce9cba13e526cd82dc9890a162dbd62dcef1b19
 ```
 
 A fresh Dify Community/Cloud installation was not repeated for 0.1.4. The manifest,
