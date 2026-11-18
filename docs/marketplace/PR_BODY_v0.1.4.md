@@ -93,7 +93,7 @@ https://github.com/AlexMultiAgent/dify-plugin-myweather/releases/download/v0.1.4
 Package SHA-256:
 
 ```text
-11335bcee3210fe535e51f481ce9cba13e526cd82dc9890a162dbd62dcef1b19
+da944eca936e279d77909db48ffe59fe737c851c1af91157d0e1606906bbf2e7
 ```
 
 Dify Community Edition 1.19.0 was tested through the local package upload flow. Dify
