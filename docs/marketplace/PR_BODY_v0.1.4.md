@@ -20,6 +20,9 @@
 - Added reliable Japanese Han-name resolution when `language=ja` is selected.
 - Rejected weak Open-Meteo candidates and stopped provider-wide retry fan-out.
 - Added runtime package verification and automated tagged GitHub Releases.
+- Compared with 0.1.3, the plugin icon now uses refined ring joins and improved
+  small-size legibility. [Before](https://github.com/AlexMultiAgent/dify-plugin-myweather/blob/v0.1.3/icon.svg)
+  / [After](https://github.com/AlexMultiAgent/dify-plugin-myweather/blob/v0.1.4/icon.svg).
 
 ## Risk level
 
