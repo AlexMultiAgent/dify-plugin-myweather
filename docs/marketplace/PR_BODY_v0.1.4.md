@@ -35,7 +35,7 @@ files, proxy arbitrary URLs, or perform write actions in third-party services.
 
 - [x] I have read and followed the Marketplace submission requirements.
 - [x] I have read and comply with the Plugin Development Guidelines.
-- [ ] I tested this plugin on Dify Community Edition and Dify Cloud, or documented
+- [x] I tested this plugin on Dify Community Edition and Dify Cloud, or documented
       any limitation below.
 - [x] The package contains only files needed at runtime.
 - [x] The package does not contain secrets, local credentials, `.env` files, `.git`
@@ -62,12 +62,19 @@ ruff format --check: 22 files already formatted
 pyright: 0 errors, 0 warnings
 pip-audit: no known vulnerabilities
 package verification: 19 runtime entries verified
+Dify Community Edition 1.19.0 local package upload: passed
 ```
 
 Live upstream smoke tests after the fix resolved an ambiguous mainland Chinese county
 and four Japanese Han-only city names to their intended locations. The package was
 also downloaded from the GitHub Release and re-verified against the tagged source
 tree.
+
+The package was installed through Dify's **Integrations → Install → Local Package
+File** flow. Dify upgraded the existing 0.1.3 installation to 0.1.4, listed the
+plugin as a Local Plugin, exposed one `Weather Lookup` action, and rendered the
+Location parameter plus Language, Units, Source Preference, and Include Raw JSON
+settings without errors.
 
 ## Reviewer notes
 
@@ -89,7 +96,8 @@ Package SHA-256:
 11335bcee3210fe535e51f481ce9cba13e526cd82dc9890a162dbd62dcef1b19
 ```
 
-A fresh Dify Community/Cloud installation was not repeated for 0.1.4. The manifest,
-tool parameters, output schema, dependencies, and installation surface are unchanged
-from 0.1.3, which passed the Marketplace review and was exercised in Dify Community
-Edition 1.19.0. This update changes location-resolution logic and release tooling.
+Dify Community Edition 1.19.0 was tested through the local package upload flow. Dify
+Cloud was not exercised from this local environment. The package was fixed after the
+first local install attempt exposed a plugin-daemon mirror dependency mismatch; the
+final package pins a mirror-compatible `regex` version and contains only runtime
+files.

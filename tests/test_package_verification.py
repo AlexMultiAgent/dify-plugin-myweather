@@ -66,7 +66,9 @@ def test_package_verifier_accepts_a_complete_runtime_archive(tmp_path):
     assert "verified" in result.stdout
 
 
-@pytest.mark.parametrize("extra", ["tests/test_secret.py", "CHANGELOG.md"])
+@pytest.mark.parametrize(
+    "extra", ["tests/test_secret.py", "CHANGELOG.md", "output/test-artifact.txt"]
+)
 def test_package_verifier_rejects_development_files(tmp_path, extra):
     package = tmp_path / "myweather.difypkg"
     _write_package(package, extra=extra)

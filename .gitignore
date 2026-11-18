@@ -10,6 +10,7 @@ venv/
 # Debug logs
 *.err
 *.out
+output/
 
 # Environment
 .env

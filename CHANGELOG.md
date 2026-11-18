@@ -16,6 +16,8 @@ is listed first.
 - Provider-wide HTTP failures stop candidate fan-out to avoid retry amplification.
 - Chinese administrative suffixes are normalized when the requested output language
   is English or another non-CJK language.
+- Runtime dependencies now resolve through the plugin daemon's package mirror, and
+  local Playwright artifacts are excluded from distribution packages.
 
 ### Added
 

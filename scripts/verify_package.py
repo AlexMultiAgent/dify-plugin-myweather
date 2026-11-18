@@ -42,6 +42,7 @@ FORBIDDEN_DIRECTORIES = frozenset(
         ".venv",
         "__pycache__",
         "docs",
+        "output",
         "scripts",
         "tests",
         "venv",
