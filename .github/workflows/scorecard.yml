@@ -1,0 +1,48 @@
+# OSSF Scorecard: supply-chain security posture of this repository
+# (pinned actions, branch protection, signed releases, ...). Free for public
+# repositories. The results are published as SARIF to code scanning under the
+# "scorecard" category and kept as a build artifact as well.
+name: Scorecard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # A different minute than the CodeQL cron so the two do not start at once.
+    - cron: "41 5 * * 2"
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # persist-credentials: false keeps the token out of the local git config,
+      # which Scorecard's own README requires.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@v2
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: results.sarif
+          category: scorecard
+      - name: Keep the SARIF report as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorecard-results
+          path: results.sarif
+          if-no-files-found: error

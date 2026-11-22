@@ -1,0 +1,41 @@
+# CodeQL analysis. Free for public repositories -- no Advanced Security
+# license needed. Runs on every push and pull request to main, plus a weekly
+# cron so that newly published queries are applied to code that has not
+# changed since the last run.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Off-peak minute on purpose: many repos share the top-of-hour crons.
+    - cron: "27 4 * * 1"
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["python"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
