@@ -73,12 +73,26 @@ jobs:
     # writes to the repository.
     permissions:
       contents: write
+      id-token: write  # Mint the OIDC token for the build provenance attestation.
+      attestations: write  # Register the build provenance attestation.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: plugin-package
           path: release
+
+      - name: Attest the package
+        # The bundle is a Sigstore bundle (mediaType
+        # application/vnd.dev.sigstore.bundle.v0.3+json) and is attached to the
+        # release as a .sigstore.json asset -- the name Sigstore itself uses for
+        # that file. OSSF Scorecard's Signed-Releases check looks for a release
+        # asset with that suffix, so the file has to be a genuine bundle and not
+        # a renamed one.
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: ${{ github.workspace }}/release/*.difypkg
       - name: Extract release notes
         shell: bash
         run: |
@@ -100,15 +114,19 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         shell: bash
         run: |
+          package="$(ls release/*.difypkg)"
+          signature="release/$(basename "${package%.difypkg}").sigstore.json"
+          cp "$BUNDLE" "$signature"
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release edit "${GITHUB_REF_NAME}" \
               --title "MyWeather ${GITHUB_REF_NAME}" \
               --notes-file release-notes.md
-            gh release upload "${GITHUB_REF_NAME}" release/*.difypkg --clobber
+            gh release upload "${GITHUB_REF_NAME}" "$package" "$signature" --clobber
           else
-            gh release create "${GITHUB_REF_NAME}" release/*.difypkg \
+            gh release create "${GITHUB_REF_NAME}" "$package" "$signature" \
               --verify-tag \
               --title "MyWeather ${GITHUB_REF_NAME}" \
               --notes-file release-notes.md
