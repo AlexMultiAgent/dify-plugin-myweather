@@ -23,8 +23,14 @@ output/
 .idea/
 
 # Claude Code
-.claude/
-.claude.local.md
+# .claude/CLAUDE.md is project knowledge and IS tracked -- a blanket ".claude/"
+# would keep the repository's own context file out of the clone. Only the
+# machine-local parts are ignored.
+.claude/worktrees/
+.claude/scratch/
+.claude/*.png
+.claude/settings.local.json
+CLAUDE.local.md
 .playwright-mcp/
 
 # OS

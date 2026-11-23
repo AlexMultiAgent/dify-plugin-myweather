@@ -51,7 +51,7 @@ FORBIDDEN_DIRECTORIES = frozenset(
 
 FORBIDDEN_FILES = frozenset(
     {
-        ".claude.local.md",
+        "CLAUDE.local.md",
         ".difyignore",
         ".env",
         ".env.example",

@@ -3,7 +3,7 @@
 .gitignore
 .difyignore
 .claude
-.claude.local.md
+CLAUDE.local.md
 .codex
 .superpowers
 .remember
