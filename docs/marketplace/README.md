@@ -19,7 +19,7 @@ versions are distributed through GitHub Releases. Do not include local paths,
 credentials, caches, or unrelated cleanup in the Marketplace PR.
 
 The update PR body should be prepared from
-[`PR_BODY_v0.1.4.md`](./PR_BODY_v0.1.4.md). The package must first pass:
+[`PR_BODY_v0.1.5.md`](./PR_BODY_v0.1.5.md). The package must first pass:
 
 ```bash
 uv run python scripts/verify_package.py myweather-X.Y.Z.difypkg --source-root .
