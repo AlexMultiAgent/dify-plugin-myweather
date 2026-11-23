@@ -59,7 +59,7 @@ input directory, so the output path is given explicitly:
 
 ```bash
 cd ..
-dify plugin package dify-plugin-myweather -o myweather-0.1.4.difypkg
+dify plugin package dify-plugin-myweather -o myweather-0.1.5.difypkg
 ```
 
 `.difyignore` is the only filter — `.gitignore` is ignored — so it has to name
@@ -67,7 +67,7 @@ dify plugin package dify-plugin-myweather -o myweather-0.1.4.difypkg
 package itself. Check the contents of the result before submitting it:
 
 ```bash
-uv run python scripts/verify_package.py ../myweather-0.1.4.difypkg --source-root .
+uv run python scripts/verify_package.py ../myweather-0.1.5.difypkg --source-root .
 ```
 
 - [ ] Packaging command succeeds without errors

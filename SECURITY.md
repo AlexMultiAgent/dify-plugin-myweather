@@ -52,8 +52,8 @@ Out of scope:
 
 | Version | Supported |
 | --- | --- |
-| 0.1.4 | Yes — current published release |
-| 0.1.5 | In development; supported once published |
+| 0.1.5 | Yes — current release |
+| 0.1.4 | No — superseded by 0.1.5 |
 
 Only the latest published release receives fixes; older versions are not
 maintained.

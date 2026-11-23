@@ -1,4 +1,4 @@
-version: 0.1.4
+version: 0.1.5
 type: plugin
 author: alexmultiagent
 name: myweather
@@ -35,7 +35,7 @@ plugins:
   tools:
   - provider/myweather.yaml
 meta:
-  version: 0.1.4
+  version: 0.1.5
   minimum_dify_version: '1.0.0'
   arch:
   - amd64

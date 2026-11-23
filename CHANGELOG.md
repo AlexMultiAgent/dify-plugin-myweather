@@ -3,6 +3,23 @@
 All notable changes to MyWeather are documented in this file. The newest release
 is listed first.
 
+## 0.1.5 - 2026-11-23
+
+### Changed
+
+- No runtime changes. The plugin code, runtime dependencies, and request/response
+  behavior are identical to 0.1.4; this release carries the supply-chain hardening
+  built since then.
+- Every GitHub Action is pinned by commit SHA, and Dependabot keeps those pins and
+  the development toolchain current.
+- Tagged releases now attach a Sigstore build-provenance bundle next to the
+  `.difypkg`.
+
+### Added
+
+- CodeQL static analysis and OpenSSF Scorecard supply-chain scanning in CI.
+- `SECURITY.md` vulnerability-reporting policy and a `.github/CODEOWNERS` file.
+
 ## 0.1.4 - 2026-11-18
 
 ### Fixed

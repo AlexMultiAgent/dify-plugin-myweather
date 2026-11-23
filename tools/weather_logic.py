@@ -38,7 +38,7 @@ TOTAL_LOOKUP_TIMEOUT = 90
 MAX_LOCATION_CANDIDATES = 4
 MAX_LOCATION_LENGTH = 200
 # When updating the plugin version, also update manifest.yaml and pyproject.toml.
-USER_AGENT = "dify-myweather-plugin/0.1.4"
+USER_AGENT = "dify-myweather-plugin/0.1.5"
 
 LANGUAGE_VALUES = frozenset({"auto", "en-US", "zh-Hans", "zh-Hant", "ja", "ko"})
 

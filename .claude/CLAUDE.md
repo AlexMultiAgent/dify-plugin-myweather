@@ -13,13 +13,13 @@ uv run pyright                                                 # type gate
 uv run pip-audit --no-deps --disable-pip -r requirements.txt   # dependency audit
 
 # package: build from the parent with -o, then verify the runtime contents
-cd .. && dify plugin package dify-plugin-myweather -o myweather-0.1.4.difypkg
-uv run python scripts/verify_package.py myweather-0.1.4.difypkg --source-root .
-dify plugin run myweather-0.1.4.difypkg -l    # smoke-test a package locally
+cd .. && dify plugin package dify-plugin-myweather -o "dify-plugin-myweather/myweather-0.1.5.difypkg"
+uv run python scripts/verify_package.py myweather-0.1.5.difypkg --source-root .
+dify plugin run myweather-0.1.5.difypkg -l    # smoke-test a package locally
 
 # marketplace validation -- the bar is 0 blocking failures
 git clone --depth 1 https://github.com/langgenius/dify-marketplace-toolkit /tmp/dify-marketplace-toolkit
-python /tmp/dify-marketplace-toolkit/validator/validate-difypkg.py myweather-0.1.4.difypkg --pr-body-file docs/marketplace/PR_BODY_v0.1.4.md
+python /tmp/dify-marketplace-toolkit/validator/validate-difypkg.py myweather-0.1.5.difypkg --pr-body-file docs/marketplace/PR_BODY_v0.1.5.md
 ```
 
 The executable-permission warning the validator prints on every file is a Windows
