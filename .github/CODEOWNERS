@@ -1,0 +1,10 @@
+# Code owners for this repository.
+#
+# GitHub picks this file up from the repository root, `docs/` or `.github/`.
+# The owner holds the only write access, so every file is owned by them.
+#
+# The file is inert until "Require review from Code Owners" is enabled in
+# the branch protection rules. It only starts to matter once somebody else
+# can open a pull request -- and note that enabling that rule makes the
+# owner's own pull requests need an approval they cannot give themselves.
+* @AlexMultiAgent
