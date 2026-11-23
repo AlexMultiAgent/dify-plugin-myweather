@@ -76,10 +76,16 @@ provenance was verified with `gh attestation verify`.
 
 Dify Community Edition 1.20.0 was upgraded from 0.1.4 to 0.1.5 through the package
 upload API and listed the installed version as 0.1.5. A live invocation with
-`location=台北` and `language=zh-Hant` returned Traditional Chinese output
-(`溫度 24.0°C，體感 25.0°C，濕度 67%，風速 5.0 公里/小時`). Open-Meteo was unreachable
-from that local sandbox during the check, and the plugin fell back to wttr.in as
-designed. Dify Cloud was not exercised from this local environment.
+`location=Taipei` and `language=zh-Hant` returned Traditional Chinese output:
+
+```text
+Sample output (Traditional Chinese, location=Taipei, language=zh-Hant):
+溫度 24.0°C，體感 25.0°C，濕度 67%，風速 5.0 公里/小時
+```
+
+Open-Meteo was unreachable from that local sandbox during the check, and the plugin
+fell back to wttr.in as designed. Dify Cloud was not exercised from this local
+environment.
 
 ## Reviewer notes
 
