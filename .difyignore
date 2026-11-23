@@ -24,3 +24,4 @@ CHANGELOG.md
 .env.example
 uv.lock
 MARKETPLACE_CHECKLIST.md
+SECURITY.md

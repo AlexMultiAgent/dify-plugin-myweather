@@ -1,5 +1,7 @@
 # MyWeather
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/AlexMultiAgent/dify-plugin-myweather/badge)](https://api.scorecard.dev/projects/github.com/AlexMultiAgent/dify-plugin-myweather)
+
 MyWeather is a Dify weather plugin that requires no API key.
 
 - Primary source is selectable: `open-meteo` or `wttr`
